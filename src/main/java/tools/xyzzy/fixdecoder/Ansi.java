@@ -17,22 +17,22 @@ final class Ansi {
     }
 
     /** Colours a FIX tag value when colour output is enabled. */
-    static String tag(String value, boolean enabled) {
+    static String colorTag(String value, boolean enabled) {
         return enabled ? TAG + value + RESET : value;
     }
 
     /** Colours a FIX field or component name when colour output is enabled. */
-    static String name(String value, boolean enabled) {
+    static String colorName(String value, boolean enabled) {
         return enabled ? NAME + value + RESET : value;
     }
 
     /** Colours a FIX field type when colour output is enabled. */
-    static String type(String value, boolean enabled) {
+    static String colorType(String value, boolean enabled) {
         return enabled ? TYPE + value + RESET : value;
     }
 
     /** Colours an error or required-field marker when colour output is enabled. */
-    static String error(String value, boolean enabled) {
+    static String colorError(String value, boolean enabled) {
         return enabled ? ERROR + value + RESET : value;
     }
 }

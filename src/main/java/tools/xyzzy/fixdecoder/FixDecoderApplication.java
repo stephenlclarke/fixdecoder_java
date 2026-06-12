@@ -3,15 +3,19 @@
 
 package tools.xyzzy.fixdecoder;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 /**
  * Command-line entry point for the Java FIX decoder.
@@ -22,6 +26,9 @@ import picocli.CommandLine.Parameters;
         version = "fixdecoder 0.3.0 (java)",
         description = "Pretty-print FIX log messages and inspect FIX dictionaries.")
 public final class FixDecoderApplication implements Callable<Integer> {
+    @Spec
+    private CommandSpec spec;
+
     @Option(names = "--xml", description = "Load a custom FIX XML dictionary.")
     private final List<Path> xmlFiles = new ArrayList<>();
 
@@ -108,7 +115,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
 
     /** Routes dictionary inspection, secret-file generation, or streaming decode. */
     @Override
-    public Integer call() throws Exception {
+    public Integer call() throws IOException, InterruptedException, ExecutionException {
         DictionaryRegistry registry = new DictionaryRegistry();
         for (Path xml : xmlFiles) {
             registry.register(xml);
@@ -116,7 +123,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
 
         FixDictionary selected = registry.resolve(fixVersion);
         boolean colours = !"no".equalsIgnoreCase(colour);
-        PrintWriter out = new PrintWriter(System.out, true);
+        PrintWriter out = spec.commandLine().getOut();
 
         DictionaryDisplay display = new DictionaryDisplay(registry, colours);
         if (info) {

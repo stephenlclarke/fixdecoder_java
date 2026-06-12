@@ -8,8 +8,7 @@ import java.util.List;
 
 /**
  * Immutable decode options shared by stdin, file, and worker processing paths.
- */
-/**
+ *
  * @param defaultDictionary dictionary used when the message does not name a known BeginString
  * @param delimiter input delimiter, normally SOH
  * @param validate whether protocol validation should run

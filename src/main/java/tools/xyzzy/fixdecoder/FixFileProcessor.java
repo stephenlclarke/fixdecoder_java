@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
@@ -39,7 +40,7 @@ final class FixFileProcessor {
     }
 
     /** Processes stdin or paths according to the requested mode. */
-    void process(ProcessingOptions options, PrintWriter out) throws Exception {
+    void process(ProcessingOptions options, PrintWriter out) throws IOException, InterruptedException, ExecutionException {
         if (options.files().isEmpty()) {
             MessageCounts counts = processReader(new BufferedReader(new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8)), options, out, null);
             if (!options.noCounts()) {
@@ -126,27 +127,60 @@ final class FixFileProcessor {
         String line;
         while ((line = reader.readLine()) != null) {
             lineNumber++;
-            String displayLine = obfuscator.obfuscateLine(line, options.delimiter());
-            List<String> messages = extractor.extractMessages(displayLine, options.delimiter());
-            for (String raw : messages) {
-                parser.parseInto(raw, reusable);
-                FixDictionary dictionary = registry.resolveBeginString(reusable.valueOf(8), options.defaultDictionary());
-                FixTagLookup lookup = new FixTagLookup(dictionary);
-                ValidationReport report = options.validate() ? validator.validate(reusable, lookup) : null;
-                if (options.validate() && report != null && !report.clean()) {
-                    out.printf("Line %d: ", lineNumber);
-                }
-                prettifier.print(reusable, lookup, report, out);
-                if (options.summary()) {
-                    printSummary(reusable, out);
-                }
-                counts.add(reusable, lookup);
-            }
-            if (options.follow() && source != null) {
-                out.flush();
-            }
+            processLine(line, lineNumber, options, out, reusable, obfuscator, counts);
+            flushFollowOutput(options, source, out);
         }
         return counts;
+    }
+
+    /** Processes every complete FIX payload found on one input line. */
+    private void processLine(
+            String line,
+            int lineNumber,
+            ProcessingOptions options,
+            PrintWriter out,
+            FixMessage reusable,
+            FixObfuscator obfuscator,
+            MessageCounts counts) {
+        String displayLine = obfuscator.obfuscateLine(line, options.delimiter());
+        List<String> messages = extractor.extractMessages(displayLine, options.delimiter());
+        for (String raw : messages) {
+            processMessage(raw, lineNumber, options, out, reusable, counts);
+        }
+    }
+
+    /** Parses, validates, prints, and counts one raw FIX message. */
+    private void processMessage(
+            String raw,
+            int lineNumber,
+            ProcessingOptions options,
+            PrintWriter out,
+            FixMessage reusable,
+            MessageCounts counts) {
+        parser.parseInto(raw, reusable);
+        FixDictionary dictionary = registry.resolveBeginString(reusable.valueOf(8), options.defaultDictionary());
+        FixTagLookup lookup = new FixTagLookup(dictionary);
+        ValidationReport report = validationReport(reusable, lookup, options);
+        if (options.validate() && report != null && !report.clean()) {
+            out.printf("Line %d: ", lineNumber);
+        }
+        prettifier.print(reusable, lookup, report, out);
+        if (options.summary()) {
+            printSummary(reusable, out);
+        }
+        counts.add(reusable, lookup);
+    }
+
+    /** Runs validation only when the caller requested it. */
+    private ValidationReport validationReport(FixMessage message, FixTagLookup lookup, ProcessingOptions options) {
+        return options.validate() ? validator.validate(message, lookup) : null;
+    }
+
+    /** Flushes promptly in follow mode so tailed output appears immediately. */
+    private void flushFollowOutput(ProcessingOptions options, Path source, PrintWriter out) {
+        if (options.follow() && source != null) {
+            out.flush();
+        }
     }
 
     /** Prints a compact order summary for the summary compatibility mode. */
@@ -204,7 +238,7 @@ final class FixFileProcessor {
         }
 
         @Override
-        public ProcessingResult call() throws Exception {
+        public ProcessingResult call() throws IOException {
             StringWriter buffer = new StringWriter(8192);
             PrintWriter writer = new PrintWriter(buffer);
             MessageCounts counts = processPath(file, options, writer);

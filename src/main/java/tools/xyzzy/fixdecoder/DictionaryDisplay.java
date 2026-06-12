@@ -4,12 +4,16 @@
 package tools.xyzzy.fixdecoder;
 
 import java.io.PrintWriter;
+import java.util.Comparator;
 import java.util.List;
 
 /**
  * Renders dictionary information in the same table-oriented style as the Rust CLI.
  */
 final class DictionaryDisplay {
+    private static final Comparator<java.util.Map.Entry<String, String>> ENUM_BY_KEY =
+            java.util.Map.Entry.comparingByKey();
+
     private final DictionaryRegistry registry;
     private final boolean colours;
 
@@ -79,7 +83,7 @@ final class DictionaryDisplay {
             out.flush();
             return;
         }
-        out.println("Component: " + Ansi.name(component.name(), colours));
+        out.println("Component: " + Ansi.colorName(component.name(), colours));
         printEntries(dictionary, component.entries(), 4, verbose, out);
         out.flush();
     }
@@ -107,16 +111,16 @@ final class DictionaryDisplay {
         }
         out.printf(
                 "Message: %s (%s)%n",
-                Ansi.name(message.name(), colours),
-                Ansi.tag(message.msgType(), colours));
+                Ansi.colorName(message.name(), colours),
+                Ansi.colorTag(message.msgType(), colours));
         if (includeHeader) {
-            out.println("    Component: " + Ansi.name("Header", colours));
+            out.println("    Component: " + Ansi.colorName("Header", colours));
             printEntries(dictionary, dictionary.header().entries(), 8, verbose, out);
         }
-        out.println("    Message: " + Ansi.name("Body", colours));
+        out.println("    Message: " + Ansi.colorName("Body", colours));
         printEntries(dictionary, message.entries(), 8, verbose, out);
         if (includeTrailer) {
-            out.println("    Component: " + Ansi.name("Trailer", colours));
+            out.println("    Component: " + Ansi.colorName("Trailer", colours));
             printEntries(dictionary, dictionary.trailer().entries(), 8, verbose, out);
         }
         out.flush();
@@ -131,31 +135,64 @@ final class DictionaryDisplay {
             PrintWriter out) {
         for (FixDictionary.Entry entry : entries) {
             switch (entry) {
-                case FixDictionary.FieldEntry fieldEntry -> {
-                    FixDictionary.FieldDef field = dictionary.field(fieldEntry.field().name());
-                    if (field != null) {
-                        printField(field, indent, fieldEntry.field().required(), out);
-                        if (verbose) {
-                            printEnums(field, indent + 4, out);
-                        }
-                    }
-                }
-                case FixDictionary.ComponentEntry componentEntry -> {
-                    FixDictionary.ComponentDef component = dictionary.component(componentEntry.component().name());
-                    if (component != null) {
-                        out.printf("%sComponent: %s%n", spaces(indent), Ansi.name(component.name(), colours));
-                        printEntries(dictionary, component.entries(), indent + 4, verbose, out);
-                    }
-                }
-                case FixDictionary.GroupEntry groupEntry -> {
-                    FixDictionary.FieldDef countField = dictionary.field(groupEntry.group().name());
-                    if (countField != null) {
-                        printField(countField, indent, groupEntry.group().required(), out);
-                    }
-                    printEntries(dictionary, groupEntry.group().entries(), indent + 4, verbose, out);
-                }
+                case FixDictionary.FieldEntry(FixDictionary.FieldRef(String fieldName, boolean required)) ->
+                        printFieldEntry(dictionary, fieldName, required, indent, verbose, out);
+                case FixDictionary.ComponentEntry(FixDictionary.ComponentRef(String componentName, boolean ignored)) ->
+                        printComponentEntry(dictionary, componentName, indent, verbose, out);
+                case FixDictionary.GroupEntry(FixDictionary.GroupDef group) ->
+                        printGroupEntry(dictionary, group, indent, verbose, out);
             }
         }
+    }
+
+    /** Prints a field reference when it resolves in the selected dictionary. */
+    private void printFieldEntry(
+            FixDictionary dictionary,
+            String fieldName,
+            boolean required,
+            int indent,
+            boolean verbose,
+            PrintWriter out) {
+        FixDictionary.FieldDef field = dictionary.field(fieldName);
+        // Custom dictionaries may contain unresolved references, matching the Rust decoder's leniency.
+        if (field == null) {
+            return;
+        }
+        printField(field, indent, required, out);
+        if (verbose) {
+            printEnums(field, indent + 4, out);
+        }
+    }
+
+    /** Prints and expands a component reference when available. */
+    private void printComponentEntry(
+            FixDictionary dictionary,
+            String componentName,
+            int indent,
+            boolean verbose,
+            PrintWriter out) {
+        FixDictionary.ComponentDef component = dictionary.component(componentName);
+        // Missing component references are ignored for permissive custom XML support.
+        if (component == null) {
+            return;
+        }
+        out.printf("%sComponent: %s%n", spaces(indent), Ansi.colorName(component.name(), colours));
+        printEntries(dictionary, component.entries(), indent + 4, verbose, out);
+    }
+
+    /** Prints a repeating group count field and its child entries. */
+    private void printGroupEntry(
+            FixDictionary dictionary,
+            FixDictionary.GroupDef group,
+            int indent,
+            boolean verbose,
+            PrintWriter out) {
+        FixDictionary.FieldDef countField = dictionary.field(group.name());
+        // The count field may be absent in partial/custom dictionaries; still show nested known fields.
+        if (countField != null) {
+            printField(countField, indent, group.required(), out);
+        }
+        printEntries(dictionary, group.entries(), indent + 4, verbose, out);
     }
 
     /** Prints one field in the `tag: name (TYPE)` layout. */
@@ -163,11 +200,11 @@ final class DictionaryDisplay {
         out.printf(
                 "%s%s: %s (%s)",
                 spaces(indent),
-                Ansi.tag(String.format("%4d", field.number()), colours),
-                Ansi.name(field.name(), colours),
-                Ansi.type(field.type(), colours));
+                Ansi.colorTag(String.format("%4d", field.number()), colours),
+                Ansi.colorName(field.name(), colours),
+                Ansi.colorType(field.type(), colours));
         if (required) {
-            out.printf(" - (%s)", Ansi.error("Y", colours));
+            out.printf(" - (%s)", Ansi.colorError("Y", colours));
         }
         out.println();
     }
@@ -175,7 +212,7 @@ final class DictionaryDisplay {
     /** Prints enum values under a field when verbose output is requested. */
     private void printEnums(FixDictionary.FieldDef field, int indent, PrintWriter out) {
         field.enums().entrySet().stream()
-                .sorted(MapEntryComparator.INSTANCE)
+                .sorted(ENUM_BY_KEY)
                 .forEach(entry -> out.printf("%s%s = %s%n", spaces(indent), entry.getKey(), entry.getValue()));
     }
 
@@ -184,13 +221,4 @@ final class DictionaryDisplay {
         return " ".repeat(Math.max(0, count));
     }
 
-    /** Stable enum sorter that keeps numeric-looking enum values in lexical order. */
-    private enum MapEntryComparator implements java.util.Comparator<java.util.Map.Entry<String, String>> {
-        INSTANCE;
-
-        @Override
-        public int compare(java.util.Map.Entry<String, String> left, java.util.Map.Entry<String, String> right) {
-            return left.getKey().compareTo(right.getKey());
-        }
-    }
 }

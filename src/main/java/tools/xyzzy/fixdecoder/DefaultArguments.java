@@ -28,46 +28,80 @@ final class DefaultArguments {
 
     /** Splits a small shell-style argument string with single and double quotes. */
     static List<String> split(String value) {
-        List<String> out = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        char quote = 0;
-        boolean escaping = false;
+        ArgumentSplitState state = new ArgumentSplitState();
         for (int index = 0; index < value.length(); index++) {
-            char ch = value.charAt(index);
+            // The state object owns quoting rules so this loop stays purely sequential.
+            state.accept(value.charAt(index));
+        }
+        return state.finish();
+    }
+
+    /** Stateful splitter for shell-like quotes and backslash escaping. */
+    private static final class ArgumentSplitState {
+        private final List<String> arguments = new ArrayList<>();
+        private final StringBuilder current = new StringBuilder();
+        private char quote;
+        private boolean escaping;
+
+        /** Accepts one character from the defaults string. */
+        private void accept(char ch) {
             if (escaping) {
-                current.append(ch);
-                escaping = false;
-                continue;
-            }
-            if (ch == '\\') {
+                appendEscaped(ch);
+            } else if (ch == '\\') {
                 escaping = true;
-                continue;
+            } else if (quoted()) {
+                acceptQuoted(ch);
+            } else {
+                acceptUnquoted(ch);
             }
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                } else {
-                    current.append(ch);
-                }
-                continue;
+        }
+
+        /** Returns parsed arguments after preserving a trailing literal backslash. */
+        private List<String> finish() {
+            if (escaping) {
+                current.append('\\');
             }
-            if (ch == '\'' || ch == '"') {
-                quote = ch;
-            } else if (Character.isWhitespace(ch)) {
-                if (!current.isEmpty()) {
-                    out.add(current.toString());
-                    current.setLength(0);
-                }
+            appendCurrentArgument();
+            return arguments;
+        }
+
+        /** Appends a character that was escaped by a preceding backslash. */
+        private void appendEscaped(char ch) {
+            current.append(ch);
+            escaping = false;
+        }
+
+        /** Handles characters while inside either quote type. */
+        private void acceptQuoted(char ch) {
+            if (ch == quote) {
+                quote = 0;
             } else {
                 current.append(ch);
             }
         }
-        if (escaping) {
-            current.append('\\');
+
+        /** Handles characters while not inside a quoted string. */
+        private void acceptUnquoted(char ch) {
+            if (ch == '\'' || ch == '"') {
+                quote = ch;
+            } else if (Character.isWhitespace(ch)) {
+                appendCurrentArgument();
+            } else {
+                current.append(ch);
+            }
         }
-        if (!current.isEmpty()) {
-            out.add(current.toString());
+
+        /** Returns true when a single or double quote is currently open. */
+        private boolean quoted() {
+            return quote != 0;
         }
-        return out;
+
+        /** Emits the current token if it contains any characters. */
+        private void appendCurrentArgument() {
+            if (!current.isEmpty()) {
+                arguments.add(current.toString());
+                current.setLength(0);
+            }
+        }
     }
 }

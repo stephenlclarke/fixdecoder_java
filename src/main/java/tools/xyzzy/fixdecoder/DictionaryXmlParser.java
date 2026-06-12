@@ -106,20 +106,13 @@ final class DictionaryXmlParser {
                 byMessageName.put(def.name(), def);
             }
 
-            FixDictionary dictionary = new FixDictionary(
-                    key,
-                    type,
-                    major,
-                    minor,
-                    servicePack,
-                    source,
-                    byTag,
-                    byName,
-                    byType,
-                    byMessageName,
-                    components,
-                    header,
-                    trailer);
+            FixDictionary dictionary = FixDictionary.builder()
+                    .metadata(key, type, major, minor, servicePack, source)
+                    .fields(byTag, byName)
+                    .messages(byType, byMessageName)
+                    .components(components)
+                    .boundaries(header, trailer)
+                    .build();
             resolveMessageShapes(dictionary);
             return dictionary;
         } catch (IOException | ParserConfigurationException | SAXException ex) {
@@ -147,36 +140,56 @@ final class DictionaryXmlParser {
             List<Integer> order) {
         for (FixDictionary.Entry entry : entries) {
             switch (entry) {
-                case FixDictionary.FieldEntry fieldEntry -> {
-                    FixDictionary.FieldDef field = dictionary.field(fieldEntry.field().name());
-                    // Unknown field references are ignored so custom dictionaries can be permissive.
-                    if (field != null) {
-                        order.add(field.number());
-                        if (fieldEntry.field().required()) {
-                            required.add(field.number());
-                        }
-                    }
-                }
-                case FixDictionary.ComponentEntry componentEntry -> {
-                    FixDictionary.ComponentDef component = dictionary.component(componentEntry.component().name());
-                    // Components expand inline because the runtime validator works with tags.
-                    if (component != null) {
-                        collectShape(dictionary, component.entries(), required, order);
-                    }
-                }
-                case FixDictionary.GroupEntry groupEntry -> {
-                    FixDictionary.FieldDef count = dictionary.field(groupEntry.group().name());
-                    // The group name is the NumInGroup field in QuickFIX XML.
-                    if (count != null) {
-                        order.add(count.number());
-                        if (groupEntry.group().required()) {
-                            required.add(count.number());
-                        }
-                    }
-                    collectShape(dictionary, groupEntry.group().entries(), required, order);
-                }
+                case FixDictionary.FieldEntry(FixDictionary.FieldRef(String fieldName, boolean fieldRequired)) ->
+                        collectFieldShape(dictionary, fieldName, fieldRequired, required, order);
+                case FixDictionary.ComponentEntry(FixDictionary.ComponentRef(String componentName, boolean ignored)) ->
+                        collectComponentShape(dictionary, componentName, required, order);
+                case FixDictionary.GroupEntry(FixDictionary.GroupDef group) ->
+                        collectGroupShape(dictionary, group, required, order);
             }
         }
+    }
+
+    /** Adds a field reference to flattened order and required-tag metadata. */
+    private void collectFieldShape(
+            FixDictionary dictionary,
+            String fieldName,
+            boolean fieldRequired,
+            List<Integer> required,
+            List<Integer> order) {
+        FixDictionary.FieldDef field = dictionary.field(fieldName);
+        // Unknown field references are ignored so custom dictionaries can be permissive.
+        if (field == null) {
+            return;
+        }
+        order.add(field.number());
+        if (fieldRequired) {
+            required.add(field.number());
+        }
+    }
+
+    /** Expands a component reference into flattened metadata. */
+    private void collectComponentShape(
+            FixDictionary dictionary,
+            String componentName,
+            List<Integer> required,
+            List<Integer> order) {
+        FixDictionary.ComponentDef component = dictionary.component(componentName);
+        // Components expand inline because the runtime validator works with tags.
+        if (component != null) {
+            collectShape(dictionary, component.entries(), required, order);
+        }
+    }
+
+    /** Adds a group counter field and recursively expands nested group entries. */
+    private void collectGroupShape(
+            FixDictionary dictionary,
+            FixDictionary.GroupDef group,
+            List<Integer> required,
+            List<Integer> order) {
+        // The group name is the NumInGroup field in QuickFIX XML.
+        collectFieldShape(dictionary, group.name(), group.required(), required, order);
+        collectShape(dictionary, group.entries(), required, order);
     }
 
     /** Deduplicates tags while preserving first-seen dictionary order. */
@@ -203,6 +216,7 @@ final class DictionaryXmlParser {
                 case "group" -> entries.add(new FixDictionary.GroupEntry(
                         new FixDictionary.GroupDef(attr(child, "name", ""), requiredFlag(child), parseEntries(child))));
                 default -> {
+                    // QuickFIX specs may contain comments or extension nodes; parser ignores them.
                 }
             }
         }

@@ -65,26 +65,32 @@ final class FixObfuscator {
         List<String> fragments = new ArrayList<>();
         boolean changed = false;
         for (String fragment : message.split(String.valueOf(FixParser.SOH))) {
-            if (fragment.isEmpty()) {
-                continue;
+            if (!fragment.isEmpty()) {
+                ObfuscatedFragment obfuscated = obfuscateFragment(fragment);
+                fragments.add(obfuscated.text());
+                changed |= obfuscated.changed();
             }
-            int eq = fragment.indexOf('=');
-            if (eq > 0) {
-                int tag = parseTag(fragment, eq);
-                String prefix = sensitive.get(tag);
-                if (prefix != null) {
-                    fragments.add(tag + "=" + alias(tag, fragment.substring(eq + 1), prefix));
-                    changed = true;
-                    continue;
-                }
-            }
-            fragments.add(fragment);
         }
         if (!changed) {
             return message;
         }
         refreshLengths(fragments);
         return String.join(String.valueOf(FixParser.SOH), fragments) + FixParser.SOH;
+    }
+
+    /** Obfuscates one tag=value fragment when the tag is configured as sensitive. */
+    private ObfuscatedFragment obfuscateFragment(String fragment) {
+        int eq = fragment.indexOf('=');
+        if (eq <= 0) {
+            return new ObfuscatedFragment(fragment, false);
+        }
+        int tag = parseTag(fragment, eq);
+        String prefix = sensitive.get(tag);
+        // Unknown or malformed tags are retained verbatim so non-FIX text is not damaged.
+        if (prefix == null) {
+            return new ObfuscatedFragment(fragment, false);
+        }
+        return new ObfuscatedFragment(tag + "=" + alias(tag, fragment.substring(eq + 1), prefix), true);
     }
 
     /** Parses the tag number without creating a substring. */
@@ -157,8 +163,11 @@ final class FixObfuscator {
         return -1;
     }
 
-    /** Hash key for stable alias lookup. */
     /** Immutable alias-map key for a sensitive tag/value pair. */
     private record Key(int tag, String value) {
+    }
+
+    /** Result of obfuscating a single FIX field fragment. */
+    private record ObfuscatedFragment(String text, boolean changed) {
     }
 }

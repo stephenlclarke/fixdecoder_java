@@ -100,7 +100,6 @@ final class DictionaryRegistry {
         return cleaned;
     }
 
-    /** Metadata needed to display alias/custom dictionary source information. */
     /** Display metadata for a registered dictionary or alias. */
     record DictionaryEntry(String key, FixDictionary dictionary, String source) {
     }

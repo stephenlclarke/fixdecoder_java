@@ -27,34 +27,26 @@ final class FixDictionary {
     private final ComponentDef header;
     private final ComponentDef trailer;
 
-    /** Creates a dictionary from parsed XML sections and precomputed lookup maps. */
-    FixDictionary(
-            String key,
-            String type,
-            String major,
-            String minor,
-            String servicePack,
-            String source,
-            Map<Integer, FieldDef> fieldsByTag,
-            Map<String, FieldDef> fieldsByName,
-            Map<String, MessageDef> messagesByType,
-            Map<String, MessageDef> messagesByName,
-            Map<String, ComponentDef> components,
-            ComponentDef header,
-            ComponentDef trailer) {
-        this.key = key;
-        this.type = type;
-        this.major = major;
-        this.minor = minor;
-        this.servicePack = servicePack;
-        this.source = source;
-        this.fieldsByTag = Map.copyOf(fieldsByTag);
-        this.fieldsByName = Map.copyOf(fieldsByName);
-        this.messagesByType = Map.copyOf(messagesByType);
-        this.messagesByName = Map.copyOf(messagesByName);
-        this.components = Map.copyOf(components);
-        this.header = header;
-        this.trailer = trailer;
+    /** Creates a dictionary from builder state prepared by the XML parser. */
+    private FixDictionary(Builder builder) {
+        this.key = builder.key;
+        this.type = builder.type;
+        this.major = builder.major;
+        this.minor = builder.minor;
+        this.servicePack = builder.servicePack;
+        this.source = builder.source;
+        this.fieldsByTag = Map.copyOf(builder.fieldsByTag);
+        this.fieldsByName = Map.copyOf(builder.fieldsByName);
+        this.messagesByType = Map.copyOf(builder.messagesByType);
+        this.messagesByName = Map.copyOf(builder.messagesByName);
+        this.components = Map.copyOf(builder.components);
+        this.header = builder.header;
+        this.trailer = builder.trailer;
+    }
+
+    /** Starts a dictionary builder used by the XML parser. */
+    static Builder builder() {
+        return new Builder();
     }
 
     /** Returns the canonical dictionary key such as FIX44 or FIX50SP2. */
@@ -160,52 +152,19 @@ final class FixDictionary {
     record ComponentRef(String name, boolean required) {
     }
 
-    static final class GroupDef {
-        private final String name;
-        private final boolean required;
-        private final List<Entry> entries;
-
-        /** Creates a repeating group definition. */
-        GroupDef(String name, boolean required, List<Entry> entries) {
-            this.name = name;
-            this.required = required;
-            this.entries = List.copyOf(entries);
-        }
-
-        /** Returns the NumInGroup field name. */
-        String name() {
-            return name;
-        }
-
-        /** Returns whether the group is required in its parent container. */
-        boolean required() {
-            return required;
-        }
-
-        /** Returns group entry fields/components in dictionary order. */
-        List<Entry> entries() {
-            return entries;
+    /** Repeating group definition with its NumInGroup field and ordered child entries. */
+    record GroupDef(String name, boolean required, List<Entry> entries) {
+        /** Copies group entries into an immutable list. */
+        GroupDef {
+            entries = List.copyOf(entries);
         }
     }
 
-    static final class ComponentDef {
-        private final String name;
-        private final List<Entry> entries;
-
-        /** Creates a component definition. */
-        ComponentDef(String name, List<Entry> entries) {
-            this.name = name;
-            this.entries = List.copyOf(entries);
-        }
-
-        /** Returns the component name. */
-        String name() {
-            return name;
-        }
-
-        /** Returns component entries in dictionary order. */
-        List<Entry> entries() {
-            return entries;
+    /** Component definition with ordered field, component, and group entries. */
+    record ComponentDef(String name, List<Entry> entries) {
+        /** Copies component entries into an immutable list. */
+        ComponentDef {
+            entries = List.copyOf(entries);
         }
     }
 
@@ -285,5 +244,65 @@ final class FixDictionary {
     /** Creates an insertion-ordered field map for XML parsing. */
     static Map<Integer, FieldDef> newFieldTagMap() {
         return new LinkedHashMap<>();
+    }
+
+    /** Mutable construction helper that keeps parser call sites readable. */
+    static final class Builder {
+        private String key;
+        private String type;
+        private String major;
+        private String minor;
+        private String servicePack;
+        private String source;
+        private Map<Integer, FieldDef> fieldsByTag = Map.of();
+        private Map<String, FieldDef> fieldsByName = Map.of();
+        private Map<String, MessageDef> messagesByType = Map.of();
+        private Map<String, MessageDef> messagesByName = Map.of();
+        private Map<String, ComponentDef> components = Map.of();
+        private ComponentDef header;
+        private ComponentDef trailer;
+
+        /** Stores dictionary version metadata. */
+        Builder metadata(String key, String type, String major, String minor, String servicePack, String source) {
+            this.key = key;
+            this.type = type;
+            this.major = major;
+            this.minor = minor;
+            this.servicePack = servicePack;
+            this.source = source;
+            return this;
+        }
+
+        /** Stores parsed field lookup maps. */
+        Builder fields(Map<Integer, FieldDef> byTag, Map<String, FieldDef> byName) {
+            this.fieldsByTag = byTag;
+            this.fieldsByName = byName;
+            return this;
+        }
+
+        /** Stores parsed message lookup maps. */
+        Builder messages(Map<String, MessageDef> byType, Map<String, MessageDef> byName) {
+            this.messagesByType = byType;
+            this.messagesByName = byName;
+            return this;
+        }
+
+        /** Stores parsed component definitions. */
+        Builder components(Map<String, ComponentDef> components) {
+            this.components = components;
+            return this;
+        }
+
+        /** Stores header and trailer pseudo-components. */
+        Builder boundaries(ComponentDef header, ComponentDef trailer) {
+            this.header = header;
+            this.trailer = trailer;
+            return this;
+        }
+
+        /** Builds an immutable dictionary snapshot. */
+        FixDictionary build() {
+            return new FixDictionary(this);
+        }
     }
 }

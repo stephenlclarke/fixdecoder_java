@@ -12,43 +12,44 @@ final class FixParser {
     /** Parses raw text into the supplied reusable message container. */
     FixMessage parseInto(String raw, FixMessage target) {
         target.reset(raw);
-        int index = 0;
         int length = raw.length();
-        while (index < length) {
-            int tagStart = index;
-            int tag = 0;
-            boolean tagValid = false;
-            while (index < length) {
-                char ch = raw.charAt(index);
-                // An equals sign terminates a candidate tag number.
-                if (ch == '=') {
-                    tagValid = index > tagStart;
-                    index++;
-                    break;
+        int fragmentStart = 0;
+        while (fragmentStart < length) {
+            int valueEnd = raw.indexOf(SOH, fragmentStart);
+            int fragmentEnd = valueEnd < 0 ? length : valueEnd;
+            int equals = raw.indexOf('=', fragmentStart);
+            int nextStart = nextFragmentStart(valueEnd, length);
+            // Skip malformed fragments without '=' inside this SOH-delimited field.
+            if (equals >= fragmentStart && equals < fragmentEnd) {
+                int tag = parseTag(raw, fragmentStart, equals);
+                if (tag >= 0) {
+                    target.nextField().set(raw, tag, equals + 1, fragmentEnd);
                 }
-                // Any non-digit before '=' invalidates this fragment as a FIX tag.
-                if (ch < '0' || ch > '9') {
-                    tagValid = false;
-                } else if (tagValid || index == tagStart) {
-                    tag = (tag * 10) + (ch - '0');
-                    tagValid = true;
-                }
-                index++;
             }
-            int valueStart = index;
-            while (index < length && raw.charAt(index) != SOH) {
-                index++;
-            }
-            int valueEnd = index;
-            // Skip malformed fragments without '=' or without a numeric tag.
-            if (tagValid && valueEnd >= valueStart) {
-                target.nextField().set(raw, tag, valueStart, valueEnd);
-            }
-            // Advance over SOH so the next loop starts at the next fragment.
-            if (index < length && raw.charAt(index) == SOH) {
-                index++;
-            }
+            fragmentStart = nextStart;
         }
         return target;
+    }
+
+    /** Parses decimal tag digits in-place, returning -1 for malformed fragments. */
+    private int parseTag(String raw, int start, int end) {
+        if (start >= end) {
+            return -1;
+        }
+        int tag = 0;
+        for (int index = start; index < end; index++) {
+            char ch = raw.charAt(index);
+            // Any non-digit before '=' invalidates this fragment as a FIX tag.
+            if (ch < '0' || ch > '9') {
+                return -1;
+            }
+            tag = (tag * 10) + (ch - '0');
+        }
+        return tag;
+    }
+
+    /** Computes where the next SOH-delimited fragment starts. */
+    private int nextFragmentStart(int valueEnd, int length) {
+        return valueEnd < 0 ? length : valueEnd + 1;
     }
 }

@@ -17,19 +17,22 @@ final class FixExtractor {
         String normalised = delimiter == FixParser.SOH ? line : line.replace(delimiter, FixParser.SOH);
         List<String> messages = new ArrayList<>(2);
         int search = 0;
-        while (search < normalised.length()) {
+        boolean scanning = true;
+        while (scanning && search < normalised.length()) {
             int start = normalised.indexOf(BEGIN, search);
-            // No BeginString means this log line has no decodable FIX payload.
             if (start < 0) {
-                break;
+                // No BeginString means this log line has no decodable FIX payload.
+                scanning = false;
+            } else {
+                int end = findMessageEnd(normalised, start);
+                if (end < 0) {
+                    // A partial payload may be completed by a later follow-mode read, so stop here.
+                    scanning = false;
+                } else {
+                    messages.add(normalised.substring(start, end));
+                    search = end;
+                }
             }
-            int end = findMessageEnd(normalised, start);
-            // A partial payload may be completed by a later follow-mode read, so stop here.
-            if (end < 0) {
-                break;
-            }
-            messages.add(normalised.substring(start, end));
-            search = end;
         }
         return messages;
     }
