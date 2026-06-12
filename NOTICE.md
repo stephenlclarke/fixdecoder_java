@@ -1,6 +1,6 @@
 # fixdecoder — Notices and Attributions
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See `LICENSE` for details.
+This project is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only). See `LICENSE` for details.
 
 ## Third-Party Materials
 
@@ -9,6 +9,8 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 - Origin: [QuickFIX Spec](https://github.com/quickfix/quickfix/tree/master/spec)
 - Usage: XML specifications are downloaded during the build and used to auto-generate dictionaries and power runtime decoding.
 - License: BSD 2-Clause “Simplified” License
+
+The QuickFIX BSD-2-Clause license is a permissive license that is compatible with distributing this project under AGPL-3.0-only, provided the QuickFIX copyright notice, conditions, and disclaimer are retained in source distributions and reproduced in binary documentation or other accompanying materials.
 
 The following notice applies to the QuickFIX materials and any files derived from them (retained verbatim as required by the BSD 2-Clause license):
 

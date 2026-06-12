@@ -77,3 +77,14 @@ make sonar
 ## Migrated assets
 
 The Java repo carries over the Rust repo's documentation images, generated examples, QuickFIX license notice, imported sample logs, icon resources, and dictionary XML files under `resources/` and `src/main/resources/`. The Rust workspace's separate packet-capture helper is intentionally not re-implemented in this Java repository.
+
+## License
+
+Project source is released under the GNU Affero General Public License v3.0 only (`AGPL-3.0-only`). Maintained source files carry SPDX headers matching the Rust implementation:
+
+```text
+SPDX-License-Identifier: AGPL-3.0-only
+SPDX-FileCopyrightText: 2026 Steve Clarke <stephenlclarke@mac.com> - https://xyzzy.tools
+```
+
+The embedded QuickFIX FIX XML specifications remain under the BSD 2-Clause “Simplified” License. That permissive license is compatible with the project AGPL-3.0-only licensing as long as the QuickFIX notice, conditions, and disclaimer are preserved; see `NOTICE.md` for the retained attribution text.
