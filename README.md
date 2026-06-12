@@ -76,7 +76,7 @@ make sonar
 
 ## Migrated assets
 
-The Java repo carries over the Rust repo's documentation images, generated examples, QuickFIX license notice, imported sample logs, icon resources, and dictionary XML files under `resources/` and `src/main/resources/`. The Rust workspace's separate packet-capture helper is intentionally not re-implemented in this Java repository.
+The Java repo carries over the Rust repo's documentation images used by this project, generated examples, QuickFIX license notice, imported sample logs, icon resources, and dictionary XML files under `resources/` and `src/main/resources/`.
 
 ## License
 
