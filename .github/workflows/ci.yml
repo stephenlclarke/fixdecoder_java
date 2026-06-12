@@ -73,10 +73,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set +e
           ./mvnw -B -DskipTests compile org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=stephenlclarke \
-            -Dsonar.projectKey=stephenlclarke_fixdecoder_java
+            -Dsonar.projectKey=stephenlclarke_fixdecoder_java 2>&1 | tee target/sonarcloud.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "${status}" -ne 0 ] && grep -q "Automatic Analysis is enabled" target/sonarcloud.log; then
+            echo "SonarCloud Automatic Analysis is enabled for this project; skipping CI-based upload."
+            exit 0
+          fi
+          exit "${status}"
       - name: SonarCloud Skip Notice
         if: env.SONAR_TOKEN == ''
         run: echo "SONAR_TOKEN is not configured; skipping SonarCloud upload."
