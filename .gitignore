@@ -1,0 +1,8 @@
+target/
+.idea/
+.vscode/
+*.iml
+*.log
+*.secret.log
+dependency-reduced-pom.xml
+.mvn/wrapper/maven-wrapper.jar
