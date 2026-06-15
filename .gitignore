@@ -4,5 +4,6 @@ target/
 *.iml
 *.log
 *.secret.log
+.SONAR_TOKEN
 dependency-reduced-pom.xml
 .mvn/wrapper/maven-wrapper.jar

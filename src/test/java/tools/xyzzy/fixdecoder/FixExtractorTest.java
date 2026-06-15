@@ -31,4 +31,25 @@ class FixExtractorTest {
     void ignoresIncompleteMessages() {
         assertTrue(new FixExtractor().extractMessages("8=FIX.4.4\u00019=005\u000135=0\u0001", FixParser.SOH).isEmpty());
     }
+
+    /** Partial messages should be retained so follow mode can complete them later. */
+    @Test
+    void retainsIncompleteTail() {
+        FixExtractor.ExtractionResult result = new FixExtractor().extract("INFO 8=FIX.4.4\u00019=005\u000135=0\u0001", FixParser.SOH);
+
+        assertTrue(result.messages().isEmpty());
+        assertEquals("8=FIX.4.4\u00019=005\u000135=0\u0001", result.tail());
+    }
+
+    /** A stale partial before a fresh BeginString should not be merged into the next message. */
+    @Test
+    void skipsStalePartialBeforeNextMessage() {
+        String valid = "8=FIX.4.4\u00019=005\u000135=A\u000110=000\u0001";
+        String line = "8=FIX.4.4\u00019=005\u000135=0\u0001" + valid;
+
+        FixExtractor.ExtractionResult result = new FixExtractor().extract(line, FixParser.SOH);
+
+        assertEquals(1, result.messages().size());
+        assertEquals(valid, result.messages().getFirst());
+    }
 }

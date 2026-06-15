@@ -26,7 +26,7 @@ The implementation uses immutable dictionary metadata, reusable mutable FIX mess
 
 ## What is it
 
-fixdecoder is a FIX-aware tail-like tool and dictionary explorer. It reads from stdin or multiple log files, detects and prettifies FIX messages in stream, and fits naturally into pipelines. Each highlighted message is followed by a detailed tag breakdown using the correct dictionary for BeginString (8) or the selected default (`--fix`, default `44`). It can validate on the fly (`--validate`), obfuscate sensitive fields (`--secret`, `--secret-files`), and inspect dictionary messages, components, and tags.
+fixdecoder is a FIX-aware tail-like tool and dictionary explorer. It reads from stdin or multiple log files, detects and prettifies FIX messages in stream, and fits naturally into pipelines. Each highlighted message is followed by a detailed tag breakdown using the correct dictionary for BeginString (8) or, for `FIXT.1.1` sessions, the negotiated application version from `ApplVerID`/`DefaultApplVerID` (`1128`/`1137`) carried on the session. It can validate on the fly (`--validate`), obfuscate sensitive fields (`--secret`, `--secret-files`), track compact order summaries (`--summary`), and inspect dictionary messages, components, and tags.
 
 ## Quick start
 
@@ -47,7 +47,7 @@ fixdecoder [[--fix=44] [--xml=FILE --xml=FILE2 ...]] [--info]
 fixdecoder [[--fix=44] [--xml=FILE --xml=FILE2 ...]] [--message[=NAME|MSGTYPE] [--verbose] [--column] [--header] [--trailer]]
 fixdecoder [[--fix=44] [--xml=FILE --xml=FILE2 ...]] [--tag[=TAG] [--verbose] [--column]]
 fixdecoder [[--fix=44] [--xml=FILE --xml=FILE2 ...]] [--component[=NAME] [--verbose] [--column]]
-fixdecoder [--xml=FILE --xml=FILE2 ...] [--validate] [--colour=yes|no|auto]
+fixdecoder [--xml=FILE --xml=FILE2 ...] [--validate] [--colour=yes|no|auto|always|never]
            [--style=STYLE] [--plain] [--number] [--paging=auto|never|always]
            [--pager=CMD] [--nowrap] [--nocounts] [--secret] [--summary]
            [--follow] [--fix=VER] [--delimiter=CHAR] [file1.log file2.log ...]
@@ -59,6 +59,12 @@ Important options:
 - Output/layout: `--column`, `--verbose`, `--header`, `--trailer`, `--colour`, `--delimiter`
 - Bat-style viewing compatibility flags: `--style`, `--plain`, `--number`, `--paging`, `--pager`, `--nowrap`
 - Processing modes: `--follow`, `--validate`, `--secret`, `--secret-files`, `--summary`, `--nocounts`
+
+Behaviour notes:
+
+- `--colour=auto` enables ANSI colour only when attached to a terminal. Bare `--colour`, `--colour=yes`, and `--color=always` force colour on; `--colour=no` and `--color=never` force it off.
+- `--follow` keeps reading at EOF like `tail -f`, retaining incomplete FIX payloads so a later append can complete and decode them.
+- `--summary` suppresses the full prettified decode and emits compact per-order lifecycle updates keyed by `OrderID`, `ClOrdID`, and `OrigClOrdID`.
 
 ## Development
 

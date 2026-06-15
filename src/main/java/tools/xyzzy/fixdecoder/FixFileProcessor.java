@@ -6,7 +6,6 @@ package tools.xyzzy.fixdecoder;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,9 +15,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
@@ -27,6 +26,7 @@ import java.util.concurrent.Future;
 final class FixFileProcessor {
     private static final DateTimeFormatter FILE_TIME =
             DateTimeFormatter.ofPattern("dd/MM/yy HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
+    private static final long FOLLOW_SLEEP_MILLIS = 100L;
 
     private final DictionaryRegistry registry;
     private final FixParser parser = new FixParser();
@@ -72,8 +72,12 @@ final class FixFileProcessor {
             MessageCounts merged = new MessageCounts();
             for (Future<ProcessingResult> future : futures) {
                 ProcessingResult result = future.get();
-                out.print(result.stdout());
-                merged.merge(result.counts());
+                try {
+                    streamWorkerOutput(result.output(), out);
+                    merged.merge(result.counts());
+                } finally {
+                    Files.deleteIfExists(result.output());
+                }
             }
             if (!options.noCounts()) {
                 merged.print(out);
@@ -122,31 +126,55 @@ final class FixFileProcessor {
             Path source) throws IOException {
         FixMessage reusable = new FixMessage();
         FixObfuscator obfuscator = new FixObfuscator(options.secret());
+        DictionarySession dictionarySession = new DictionarySession(registry, options.defaultDictionary());
+        OrderSummaryTracker summaryTracker = new OrderSummaryTracker();
         MessageCounts counts = new MessageCounts();
+        String pending = "";
         int lineNumber = 0;
-        String line;
-        while ((line = reader.readLine()) != null) {
+        while (!Thread.currentThread().isInterrupted()) {
+            String line = reader.readLine();
+            if (line == null) {
+                if (!options.follow() || !waitForMoreInput(out)) {
+                    break;
+                }
+                continue;
+            }
             lineNumber++;
-            processLine(line, lineNumber, options, out, reusable, obfuscator, counts);
+            pending = processLine(
+                    line,
+                    pending,
+                    lineNumber,
+                    options,
+                    out,
+                    reusable,
+                    obfuscator,
+                    dictionarySession,
+                    summaryTracker,
+                    counts);
             flushFollowOutput(options, source, out);
         }
         return counts;
     }
 
     /** Processes every complete FIX payload found on one input line. */
-    private void processLine(
+    private String processLine(
             String line,
+            String pending,
             int lineNumber,
             ProcessingOptions options,
             PrintWriter out,
             FixMessage reusable,
             FixObfuscator obfuscator,
+            DictionarySession dictionarySession,
+            OrderSummaryTracker summaryTracker,
             MessageCounts counts) {
-        String displayLine = obfuscator.obfuscateLine(line, options.delimiter());
-        List<String> messages = extractor.extractMessages(displayLine, options.delimiter());
+        String displayLine = obfuscator.obfuscateLine(pending + line, options.delimiter());
+        FixExtractor.ExtractionResult extracted = extractor.extract(displayLine, options.delimiter());
+        List<String> messages = extracted.messages();
         for (String raw : messages) {
-            processMessage(raw, lineNumber, options, out, reusable, counts);
+            processMessage(raw, lineNumber, options, out, reusable, dictionarySession, summaryTracker, counts);
         }
+        return options.follow() ? extracted.tail() : "";
     }
 
     /** Parses, validates, prints, and counts one raw FIX message. */
@@ -156,18 +184,22 @@ final class FixFileProcessor {
             ProcessingOptions options,
             PrintWriter out,
             FixMessage reusable,
+            DictionarySession dictionarySession,
+            OrderSummaryTracker summaryTracker,
             MessageCounts counts) {
         parser.parseInto(raw, reusable);
-        FixDictionary dictionary = registry.resolveBeginString(reusable.valueOf(8), options.defaultDictionary());
-        FixTagLookup lookup = new FixTagLookup(dictionary);
+        FixTagLookup lookup = dictionarySession.lookupFor(reusable);
         ValidationReport report = validationReport(reusable, lookup, options);
+        if (options.summary()) {
+            printSummaryValidation(lineNumber, report, options, out);
+            summaryTracker.accept(reusable, lookup, out);
+            counts.add(reusable, lookup);
+            return;
+        }
         if (options.validate() && report != null && !report.clean()) {
             out.printf("Line %d: ", lineNumber);
         }
         prettifier.print(reusable, lookup, report, out);
-        if (options.summary()) {
-            printSummary(reusable, out);
-        }
         counts.add(reusable, lookup);
     }
 
@@ -176,36 +208,41 @@ final class FixFileProcessor {
         return options.validate() ? validator.validate(message, lookup) : null;
     }
 
+    /** Prints validation failures in summary mode, where no full prettified message follows. */
+    private void printSummaryValidation(int lineNumber, ValidationReport report, ProcessingOptions options, PrintWriter out) {
+        if (options.validate() && report != null && !report.clean()) {
+            out.printf("Line %d: %s%n", lineNumber, String.join("; ", report.errors()));
+        }
+    }
+
     /** Flushes promptly in follow mode so tailed output appears immediately. */
     private void flushFollowOutput(ProcessingOptions options, Path source, PrintWriter out) {
-        if (options.follow() && source != null) {
+        if (options.follow()) {
             out.flush();
         }
     }
 
-    /** Prints a compact order summary for the summary compatibility mode. */
-    private void printSummary(FixMessage message, PrintWriter out) {
-        String clOrdId = message.valueOf(11);
-        String orderId = message.valueOf(37);
-        String execType = message.valueOf(150);
-        String ordStatus = message.valueOf(39);
-        if (clOrdId == null && orderId == null && execType == null && ordStatus == null) {
-            return;
+    /** Sleeps briefly after EOF in follow mode and stops cleanly when interrupted. */
+    private boolean waitForMoreInput(PrintWriter out) {
+        out.flush();
+        try {
+            Thread.sleep(FOLLOW_SLEEP_MILLIS);
+            return !Thread.currentThread().isInterrupted();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return false;
         }
-        out.println("Order Summary:");
-        if (orderId != null) {
-            out.println("    OrderID: " + orderId);
+    }
+
+    /** Streams captured worker output without materialising whole log output in memory. */
+    private void streamWorkerOutput(Path output, PrintWriter out) throws IOException {
+        try (BufferedReader reader = Files.newBufferedReader(output, StandardCharsets.UTF_8)) {
+            char[] buffer = new char[8192];
+            int read;
+            while ((read = reader.read(buffer)) >= 0) {
+                out.write(buffer, 0, read);
+            }
         }
-        if (clOrdId != null) {
-            out.println("    ClOrdID: " + clOrdId);
-        }
-        if (execType != null) {
-            out.println("    ExecType: " + execType);
-        }
-        if (ordStatus != null) {
-            out.println("    OrdStatus: " + ordStatus);
-        }
-        out.println();
     }
 
     /** Prints the bat-style file header used by file decode mode. */
@@ -239,11 +276,15 @@ final class FixFileProcessor {
 
         @Override
         public ProcessingResult call() throws IOException {
-            StringWriter buffer = new StringWriter(8192);
-            PrintWriter writer = new PrintWriter(buffer);
-            MessageCounts counts = processPath(file, options, writer);
-            writer.flush();
-            return new ProcessingResult(buffer.toString(), counts);
+            Path output = Files.createTempFile("fixdecoder-java-", ".out");
+            try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(output, StandardCharsets.UTF_8))) {
+                MessageCounts counts = processPath(file, options, writer);
+                writer.flush();
+                return new ProcessingResult(output, counts);
+            } catch (IOException | RuntimeException ex) {
+                Files.deleteIfExists(output);
+                throw ex;
+            }
         }
     }
 }

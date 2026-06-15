@@ -5,6 +5,7 @@ package tools.xyzzy.fixdecoder;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -175,6 +176,7 @@ final class FixDictionary {
         private final List<Entry> entries;
         private final List<Integer> requiredTags;
         private final List<Integer> fieldOrder;
+        private final Map<Integer, Integer> fieldOrderIndex;
 
         /** Creates a message definition. */
         MessageDef(String name, String msgType, String category, List<Entry> entries) {
@@ -184,6 +186,7 @@ final class FixDictionary {
             this.entries = List.copyOf(entries);
             this.requiredTags = new ArrayList<>();
             this.fieldOrder = new ArrayList<>();
+            this.fieldOrderIndex = new HashMap<>();
         }
 
         /** Returns the message name. */
@@ -216,12 +219,21 @@ final class FixDictionary {
             return Collections.unmodifiableList(fieldOrder);
         }
 
+        /** Returns flattened dictionary order for a tag, or -1 when not part of this message. */
+        int orderOf(int tag) {
+            return fieldOrderIndex.getOrDefault(tag, -1);
+        }
+
         /** Stores flattened required and ordering metadata after XML parsing. */
         void setResolvedShape(List<Integer> required, List<Integer> order) {
             requiredTags.clear();
             requiredTags.addAll(required);
             fieldOrder.clear();
             fieldOrder.addAll(order);
+            fieldOrderIndex.clear();
+            for (int index = 0; index < fieldOrder.size(); index++) {
+                fieldOrderIndex.put(fieldOrder.get(index), index);
+            }
         }
     }
 

@@ -3,11 +3,13 @@
 
 package tools.xyzzy.fixdecoder;
 
+import java.nio.file.Path;
+
 /**
- * Captures worker output and counts so parallel file decoding can emit in argv order.
+ * Captures worker output location and counts so parallel file decoding can emit in argv order.
  *
- * @param stdout captured worker output
+ * @param output captured worker output file
  * @param counts message counts captured by the worker
  */
-record ProcessingResult(String stdout, MessageCounts counts) {
+record ProcessingResult(Path output, MessageCounts counts) {
 }
