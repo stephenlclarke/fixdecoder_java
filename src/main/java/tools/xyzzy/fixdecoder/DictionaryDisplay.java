@@ -11,6 +11,8 @@ import java.util.List;
  * Renders dictionary information in the same table-oriented style as the Rust CLI.
  */
 final class DictionaryDisplay {
+    private static final int TAG_WIDTH = 4;
+    private static final int FIELD_NAME_OFFSET = TAG_WIDTH + 2;
     private static final int MESSAGE_FIELD_INDENT = 8;
     private static final int ROOT_COMPONENT_FIELD_INDENT = 4;
     private static final int GROUP_CHILD_FIELD_INDENT = 6;
@@ -67,7 +69,7 @@ final class DictionaryDisplay {
         }
         printField(field, 0, false, out);
         if (verbose) {
-            printEnums(field, 4, out);
+            printEnums(field, fieldNameIndent(0), out);
         }
         out.flush();
     }
@@ -164,7 +166,7 @@ final class DictionaryDisplay {
         }
         printField(field, indent, required, out);
         if (verbose) {
-            printEnums(field, indent + 4, out);
+            printEnums(field, fieldNameIndent(indent), out);
         }
     }
 
@@ -204,7 +206,7 @@ final class DictionaryDisplay {
         out.printf(
                 "%s%s: %s (%s)",
                 spaces(indent),
-                Ansi.colorTag(String.format("%4d", field.number()), colours),
+                Ansi.colorTag(String.format("%" + TAG_WIDTH + "d", field.number()), colours),
                 Ansi.colorName(field.name(), colours),
                 Ansi.colorType(field.type(), colours));
         if (required) {
@@ -215,9 +217,14 @@ final class DictionaryDisplay {
 
     /** Prints enum values under a field when verbose output is requested. */
     private void printEnums(FixDictionary.FieldDef field, int indent, PrintWriter out) {
+        int enumWidth = field.enums().keySet().stream().mapToInt(String::length).max().orElse(1);
         field.enums().entrySet().stream()
                 .sorted(ENUM_BY_KEY)
-                .forEach(entry -> out.printf("%s%s = %s%n", spaces(indent), entry.getKey(), entry.getValue()));
+                .forEach(entry -> out.printf(
+                        "%s%s : %s%n",
+                        spaces(indent),
+                        Ansi.colorValue(String.format("%" + enumWidth + "s", entry.getKey()), colours),
+                        Ansi.colorEnum(entry.getValue(), colours)));
     }
 
     /** Allocates indentation strings only in user-facing display paths. */
@@ -228,6 +235,11 @@ final class DictionaryDisplay {
     /** Places component labels to the left of the field tag column for the current container. */
     private int componentLabelIndent(int fieldIndent) {
         return Math.max(0, fieldIndent - COMPONENT_LABEL_OUTDENT);
+    }
+
+    /** Returns the visible column where field names start for a tag line. */
+    private int fieldNameIndent(int fieldIndent) {
+        return fieldIndent + FIELD_NAME_OFFSET;
     }
 
 }

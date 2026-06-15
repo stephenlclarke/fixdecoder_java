@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Tests dictionary display modes used by the CLI. */
@@ -31,8 +33,54 @@ class DictionaryDisplayTest {
 
         new DictionaryDisplay(registry, false).printTag(registry.resolve("44"), 35, true, new PrintWriter(buffer));
 
-        assertTrue(buffer.toString().contains("MsgType"));
-        assertTrue(buffer.toString().contains("HEARTBEAT"));
+        String output = buffer.toString();
+        assertTrue(output.contains("  35: MsgType (STRING)"));
+        assertTrue(output.contains("       0 : HEARTBEAT"));
+        assertTrue(output.contains("       1 : TEST_REQUEST"));
+        assertTrue(output.contains("      AA : DERIVATIVE_SECURITY_LIST"));
+    }
+
+    /** Verbose tag mode should use the same value and enum colours as decoded FIX output. */
+    @Test
+    void printTagUsesDecodedOutputColoursForEnums() {
+        DictionaryRegistry registry = new DictionaryRegistry();
+        StringWriter buffer = new StringWriter();
+
+        new DictionaryDisplay(registry, true).printTag(registry.resolve("44"), 35, true, new PrintWriter(buffer));
+
+        String output = buffer.toString();
+        assertTrue(output.contains(Ansi.colorTag("  35", true)));
+        assertTrue(output.contains(Ansi.colorValue(" 0", true) + " : " + Ansi.colorEnum("HEARTBEAT", true)));
+    }
+
+    /** Verbose enum output should align to the longest code for the selected field. */
+    @Test
+    void printTagUsesDynamicEnumWidthForLongCodes() {
+        FixDictionary.FieldDef field = new FixDictionary.FieldDef(
+                35,
+                "MsgType",
+                "STRING",
+                Map.of(
+                        "A", "Apple",
+                        "LONG", "LongCode"));
+        FixDictionary dictionary = FixDictionary.builder()
+                .metadata("TEST", "FIX", "4", "4", "", "test")
+                .fields(Map.of(35, field), Map.of("MsgType", field))
+                .messages(Map.of(), Map.of())
+                .components(Map.of())
+                .boundaries(
+                        new FixDictionary.ComponentDef("Header", List.of()),
+                        new FixDictionary.ComponentDef("Trailer", List.of()))
+                .build();
+        StringWriter buffer = new StringWriter();
+
+        new DictionaryDisplay(new DictionaryRegistry(), false).printTag(dictionary, 35, true, new PrintWriter(buffer));
+
+        assertTrue(buffer.toString().contains(String.join(
+                "\n",
+                "  35: MsgType (STRING)",
+                "         A : Apple",
+                "      LONG : LongCode")));
     }
 
     /** Message and component modes should recurse through fields and components. */

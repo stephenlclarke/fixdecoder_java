@@ -11,6 +11,8 @@ final class Ansi {
     static final String TAG = "\u001B[38;5;81m";
     static final String NAME = "\u001B[38;5;151m";
     static final String TYPE = "\u001B[38;5;228m";
+    static final String VALUE = TYPE;
+    static final String ENUM = "\u001B[38;5;214m";
     static final String ERROR = "\u001B[31m";
 
     private Ansi() {
@@ -29,6 +31,16 @@ final class Ansi {
     /** Colours a FIX field type when colour output is enabled. */
     static String colorType(String value, boolean enabled) {
         return enabled ? TYPE + value + RESET : value;
+    }
+
+    /** Colours a FIX field value when colour output is enabled. */
+    static String colorValue(String value, boolean enabled) {
+        return enabled ? VALUE + value + RESET : value;
+    }
+
+    /** Colours a FIX enum description when colour output is enabled. */
+    static String colorEnum(String value, boolean enabled) {
+        return enabled ? ENUM + value + RESET : value;
     }
 
     /** Colours an error or required-field marker when colour output is enabled. */
