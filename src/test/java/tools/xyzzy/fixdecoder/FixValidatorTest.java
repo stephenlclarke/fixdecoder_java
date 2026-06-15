@@ -22,4 +22,15 @@ class FixValidatorTest {
         assertTrue(report.tagErrors().containsKey(49));
         assertTrue(report.tagErrors().containsKey(56));
     }
+
+    /** Timestamp validation should reject junk after an otherwise valid time. */
+    @Test
+    void rejectsTimestampTrailingJunk() {
+        String raw = "8=FIX.4.4\u00019=005\u000135=0\u000149=S\u000156=T\u000134=1\u000152=20250101-00:00:00BAD\u000110=000\u0001";
+        FixMessage message = new FixParser().parseInto(raw, new FixMessage());
+        ValidationReport report = new FixValidator().validate(message, new FixTagLookup(new DictionaryRegistry().resolve("44")));
+
+        assertFalse(report.clean());
+        assertTrue(report.tagErrors().get(52).getFirst().contains("Invalid UTCTIMESTAMP"));
+    }
 }

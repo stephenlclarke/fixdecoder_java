@@ -16,6 +16,8 @@ final class FixObfuscator {
     private final Map<Integer, String> sensitive;
     private final Map<Key, String> aliases = new HashMap<>();
     private final Map<Integer, Integer> counters = new HashMap<>();
+    private final FixExtractor extractor = new FixExtractor();
+    private final List<String> fragments = new ArrayList<>(64);
 
     /** Creates an obfuscator with process-local alias state. */
     FixObfuscator(boolean enabled) {
@@ -39,7 +41,6 @@ final class FixObfuscator {
         if (!enabled) {
             return line;
         }
-        FixExtractor extractor = new FixExtractor();
         List<String> messages = extractor.extractMessages(line, delimiter);
         if (messages.isEmpty()) {
             return line;
@@ -62,41 +63,46 @@ final class FixObfuscator {
         if (!enabled) {
             return message;
         }
-        List<String> fragments = new ArrayList<>();
+        fragments.clear();
         boolean changed = false;
-        for (String fragment : message.split(String.valueOf(FixParser.SOH))) {
-            if (!fragment.isEmpty()) {
-                ObfuscatedFragment obfuscated = obfuscateFragment(fragment);
-                fragments.add(obfuscated.text());
-                changed |= obfuscated.changed();
+        int fragmentStart = 0;
+        while (fragmentStart < message.length()) {
+            int fragmentEnd = message.indexOf(FixParser.SOH, fragmentStart);
+            int end = fragmentEnd < 0 ? message.length() : fragmentEnd;
+            if (end > fragmentStart) {
+                changed |= addObfuscatedFragment(message, fragmentStart, end);
             }
+            fragmentStart = fragmentEnd < 0 ? message.length() : fragmentEnd + 1;
         }
         if (!changed) {
             return message;
         }
         refreshLengths(fragments);
-        return String.join(String.valueOf(FixParser.SOH), fragments) + FixParser.SOH;
+        return joinFragments();
     }
 
-    /** Obfuscates one tag=value fragment when the tag is configured as sensitive. */
-    private ObfuscatedFragment obfuscateFragment(String fragment) {
-        int eq = fragment.indexOf('=');
-        if (eq <= 0) {
-            return new ObfuscatedFragment(fragment, false);
+    /** Adds one transformed fragment and reports whether its value changed. */
+    private boolean addObfuscatedFragment(String message, int start, int end) {
+        int eq = message.indexOf('=', start);
+        if (eq <= start || eq >= end) {
+            fragments.add(message.substring(start, end));
+            return false;
         }
-        int tag = parseTag(fragment, eq);
+        int tag = parseTag(message, start, eq);
         String prefix = sensitive.get(tag);
         // Unknown or malformed tags are retained verbatim so non-FIX text is not damaged.
         if (prefix == null) {
-            return new ObfuscatedFragment(fragment, false);
+            fragments.add(message.substring(start, end));
+            return false;
         }
-        return new ObfuscatedFragment(tag + "=" + alias(tag, fragment.substring(eq + 1), prefix), true);
+        fragments.add(tag + "=" + alias(tag, message.substring(eq + 1, end), prefix));
+        return true;
     }
 
     /** Parses the tag number without creating a substring. */
-    private int parseTag(String fragment, int end) {
+    private int parseTag(String fragment, int start, int end) {
         int tag = 0;
-        for (int index = 0; index < end; index++) {
+        for (int index = start; index < end; index++) {
             char ch = fragment.charAt(index);
             if (ch < '0' || ch > '9') {
                 return -1;
@@ -114,7 +120,7 @@ final class FixObfuscator {
             return existing;
         }
         int counter = counters.merge(tag, 1, Integer::sum);
-        String alias = prefix + String.format("%04d", counter);
+        String alias = prefix + fourDigits(counter);
         aliases.put(key, alias);
         return alias;
     }
@@ -140,7 +146,37 @@ final class FixObfuscator {
             }
             checksum += FixParser.SOH;
         }
-        fragments.set(checksumIndex, "10=" + String.format("%03d", checksum % 256));
+        fragments.set(checksumIndex, "10=" + threeDigits(checksum % 256));
+    }
+
+    /** Joins rewritten fragments with SOH separators without regex helpers. */
+    private String joinFragments() {
+        StringBuilder out = new StringBuilder();
+        for (String fragment : fragments) {
+            out.append(fragment).append(FixParser.SOH);
+        }
+        return out.toString();
+    }
+
+    /** Formats a FIX checksum without the overhead of Formatter. */
+    private String threeDigits(int value) {
+        int normalized = Math.floorMod(value, 1000);
+        return new String(new char[] {
+                (char) ('0' + (normalized / 100)),
+                (char) ('0' + ((normalized / 10) % 10)),
+                (char) ('0' + (normalized % 10))
+        });
+    }
+
+    /** Formats stable aliases with four decimal digits without Formatter allocation. */
+    private String fourDigits(int value) {
+        int normalized = Math.floorMod(value, 10_000);
+        return new String(new char[] {
+                (char) ('0' + (normalized / 1000)),
+                (char) ('0' + ((normalized / 100) % 10)),
+                (char) ('0' + ((normalized / 10) % 10)),
+                (char) ('0' + (normalized % 10))
+        });
     }
 
     /** Finds the first field with the requested tag. */
@@ -167,7 +203,4 @@ final class FixObfuscator {
     private record Key(int tag, String value) {
     }
 
-    /** Result of obfuscating a single FIX field fragment. */
-    private record ObfuscatedFragment(String text, boolean changed) {
-    }
 }

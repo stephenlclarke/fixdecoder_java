@@ -3,6 +3,7 @@
 
 package tools.xyzzy.fixdecoder;
 
+import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,19 +13,36 @@ import java.util.List;
  */
 final class FixMessage {
     private final List<FixField> fields = new ArrayList<>(64);
+    private final List<FixField> activeFields = Collections.unmodifiableList(new AbstractList<>() {
+        @Override
+        public FixField get(int index) {
+            if (index < 0 || index >= fieldCount) {
+                throw new IndexOutOfBoundsException(index);
+            }
+            return fields.get(index);
+        }
+
+        @Override
+        public int size() {
+            return fieldCount;
+        }
+    });
     private String raw = "";
+    private int fieldCount;
 
     /** Clears previous fields and binds the container to a new raw message. */
     void reset(String raw) {
         this.raw = raw;
-        fields.clear();
+        fieldCount = 0;
     }
 
-    /** Allocates the next field slot for the parser. */
+    /** Returns the next reusable field slot for the parser. */
     FixField nextField() {
-        FixField field = new FixField();
-        fields.add(field);
-        return field;
+        if (fieldCount == fields.size()) {
+            // The pool grows only when a message exceeds the largest shape seen by this worker.
+            fields.add(new FixField());
+        }
+        return fields.get(fieldCount++);
     }
 
     /** Returns the raw SOH-delimited message text. */
@@ -34,12 +52,13 @@ final class FixMessage {
 
     /** Returns fields in wire order. */
     List<FixField> fields() {
-        return Collections.unmodifiableList(fields);
+        return activeFields;
     }
 
     /** Returns the first value for a tag, or null when absent. */
     String valueOf(int tag) {
-        for (FixField field : fields) {
+        for (int index = 0; index < fieldCount; index++) {
+            FixField field = fields.get(index);
             // FIX messages usually have unique header/body/trailer tags outside repeating groups.
             if (field.tag() == tag) {
                 return field.value();
@@ -50,7 +69,8 @@ final class FixMessage {
 
     /** Returns true when any field has the supplied tag. */
     boolean hasTag(int tag) {
-        for (FixField field : fields) {
+        for (int index = 0; index < fieldCount; index++) {
+            FixField field = fields.get(index);
             // Linear scan keeps the hot parse container compact and allocation-free.
             if (field.tag() == tag) {
                 return true;

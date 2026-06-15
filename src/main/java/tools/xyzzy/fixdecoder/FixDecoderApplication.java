@@ -8,6 +8,7 @@ import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import picocli.CommandLine;
@@ -62,7 +63,12 @@ public final class FixDecoderApplication implements Callable<Integer> {
     @Option(names = "--validate", description = "Validate messages while decoding.")
     private boolean validate;
 
-    @Option(names = {"--colour", "--color"}, defaultValue = "auto", description = "Colour mode: yes, no, or auto.")
+    @Option(
+            names = {"--colour", "--color"},
+            arity = "0..1",
+            fallbackValue = "yes",
+            defaultValue = "auto",
+            description = "Colour mode: yes, no, always, never, or auto.")
     private String colour;
 
     @Option(names = "--delimiter", defaultValue = "\u0001", description = "Input/output delimiter.")
@@ -122,7 +128,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
         }
 
         FixDictionary selected = registry.resolve(fixVersion);
-        boolean colours = !"no".equalsIgnoreCase(colour);
+        boolean colours = coloursEnabled();
         PrintWriter out = spec.commandLine().getOut();
 
         DictionaryDisplay display = new DictionaryDisplay(registry, colours);
@@ -165,6 +171,18 @@ public final class FixDecoderApplication implements Callable<Integer> {
     /** Converts blank optional values from picocli into null. */
     private String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    /** Resolves terminal-sensitive colour settings and validates user aliases. */
+    private boolean coloursEnabled() {
+        String mode = colour == null ? "auto" : colour.toLowerCase(Locale.ROOT);
+        return switch (mode) {
+            case "yes", "always", "true" -> true;
+            case "no", "never", "false" -> false;
+            case "auto" -> System.console() != null;
+            default -> throw new CommandLine.ParameterException(
+                    spec.commandLine(), "invalid value for --colour: " + colour);
+        };
     }
 
     /** Parses SOH, hex, and literal delimiter values. */

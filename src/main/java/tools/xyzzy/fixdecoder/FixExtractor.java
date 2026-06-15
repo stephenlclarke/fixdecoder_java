@@ -14,9 +14,15 @@ final class FixExtractor {
 
     /** Extracts all complete messages, normalising a custom delimiter to SOH. */
     List<String> extractMessages(String line, char delimiter) {
+        return extract(line, delimiter).messages();
+    }
+
+    /** Extracts complete messages and returns any trailing incomplete FIX payload. */
+    ExtractionResult extract(String line, char delimiter) {
         String normalised = delimiter == FixParser.SOH ? line : line.replace(delimiter, FixParser.SOH);
         List<String> messages = new ArrayList<>(2);
         int search = 0;
+        int tailStart = -1;
         boolean scanning = true;
         while (scanning && search < normalised.length()) {
             int start = normalised.indexOf(BEGIN, search);
@@ -26,15 +32,29 @@ final class FixExtractor {
             } else {
                 int end = findMessageEnd(normalised, start);
                 if (end < 0) {
+                    int nextStart = nextMessageStart(normalised, start);
+                    if (nextStart >= 0) {
+                        // A later BeginString before any checksum means this partial candidate is stale.
+                        search = nextStart;
+                        continue;
+                    }
                     // A partial payload may be completed by a later follow-mode read, so stop here.
+                    tailStart = start;
                     scanning = false;
                 } else {
+                    int nestedStart = nextMessageStart(normalised, start);
+                    if (nestedStart >= 0 && nestedStart < end) {
+                        // Do not merge an abandoned partial payload with the next complete message.
+                        search = nestedStart;
+                        continue;
+                    }
                     messages.add(normalised.substring(start, end));
                     search = end;
                 }
             }
         }
-        return messages;
+        String tail = tailStart < 0 ? "" : normalised.substring(tailStart);
+        return new ExtractionResult(messages, tail);
     }
 
     /** Locates the SOH after tag 10 when a complete checksum field is present. */
@@ -78,5 +98,23 @@ final class FixExtractor {
             }
         }
         return true;
+    }
+
+    /** Finds the next plausible BeginString after the current candidate. */
+    private int nextMessageStart(String line, int currentStart) {
+        int nextStart = line.indexOf(BEGIN, currentStart + BEGIN.length());
+        while (nextStart >= 0 && !hasMessageBoundary(line, nextStart)) {
+            nextStart = line.indexOf(BEGIN, nextStart + BEGIN.length());
+        }
+        return nextStart;
+    }
+
+    /** Accepts starts at line boundaries, log-token boundaries, or after SOH. */
+    private boolean hasMessageBoundary(String line, int start) {
+        return start == 0 || Character.isWhitespace(line.charAt(start - 1)) || line.charAt(start - 1) == FixParser.SOH;
+    }
+
+    /** Extraction output containing complete messages plus a retained partial tail. */
+    record ExtractionResult(List<String> messages, String tail) {
     }
 }

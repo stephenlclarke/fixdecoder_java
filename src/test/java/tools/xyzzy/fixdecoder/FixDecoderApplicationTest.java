@@ -4,10 +4,13 @@
 package tools.xyzzy.fixdecoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
@@ -28,6 +31,33 @@ class FixDecoderApplicationTest {
         Captured captured = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--tag=35", "--fix=44")));
 
         assertTrue(captured.stdout().contains("MsgType"));
+    }
+
+    /** Auto colour should disable ANSI when the test process is not attached to a console. */
+    @Test
+    void autoColourSuppressesAnsiWhenNotTerminal() {
+        Captured captured = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--fix=44")));
+
+        assertFalse(captured.stdout().contains("\u001B["));
+    }
+
+    /** Bare --colour and --color=never aliases should force deterministic colour modes. */
+    @Test
+    void parsesColourAliases() {
+        Captured forced = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--colour", "--fix=44")));
+        Captured disabled = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--color=never", "--fix=44")));
+
+        assertTrue(forced.stdout().contains("\u001B["));
+        assertFalse(disabled.stdout().contains("\u001B["));
+    }
+
+    /** Invalid colour values should be rejected instead of silently enabling ANSI output. */
+    @Test
+    void rejectsInvalidColourMode() {
+        CommandLine command = new CommandLine(new FixDecoderApplication());
+        command.setErr(new PrintWriter(new StringWriter()));
+
+        assertEquals(CommandLine.ExitCode.USAGE, command.execute("--info", "--colour=maybe"));
     }
 
     /** Captures stdout around a CLI invocation. */

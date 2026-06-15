@@ -156,11 +156,7 @@ final class FixValidator {
         try {
             LocalDate.parse(value.substring(0, 8), DATE);
             String time = value.substring(9);
-            if (time.length() >= 8) {
-                LocalTime.parse(time.substring(0, 8));
-            } else {
-                report.add(field.tag(), INVALID_TIMESTAMP + value + FOR_TAG + field.tag());
-            }
+            LocalTime.parse(time);
         } catch (DateTimeException ex) {
             report.add(field.tag(), INVALID_TIMESTAMP + value + FOR_TAG + field.tag());
         }
@@ -179,7 +175,7 @@ final class FixValidator {
     private void validateOrdering(FixMessage message, FixDictionary.MessageDef def, ValidationReport report) {
         int lastOrder = -1;
         for (FixField field : message.fields()) {
-            int order = def.fieldOrder().indexOf(field.tag());
+            int order = def.orderOf(field.tag());
             if (order >= 0) {
                 if (order < lastOrder) {
                     report.add(field.tag(), "Tag " + field.tag() + " appears out of dictionary order");
@@ -226,8 +222,18 @@ final class FixValidator {
         int expected = total % 256;
         int declared = checksum.parseIntValue(-1);
         if (declared != expected) {
-            report.add(10, "Checksum mismatch: got " + String.format("%03d", declared) + ", expected " + String.format("%03d", expected));
+            report.add(10, "Checksum mismatch: got " + threeDigits(declared) + ", expected " + threeDigits(expected));
         }
+    }
+
+    /** Formats checksum values without creating a Formatter. */
+    private String threeDigits(int value) {
+        int normalized = Math.floorMod(value, 1000);
+        return new String(new char[] {
+                (char) ('0' + (normalized / 100)),
+                (char) ('0' + ((normalized / 10) % 10)),
+                (char) ('0' + (normalized % 10))
+        });
     }
 
     /** Result of one pass over message fields. */

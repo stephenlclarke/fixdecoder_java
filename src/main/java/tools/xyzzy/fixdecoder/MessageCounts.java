@@ -4,6 +4,7 @@
 package tools.xyzzy.fixdecoder;
 
 import java.io.PrintWriter;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -11,7 +12,7 @@ import java.util.Map;
  * Tracks MsgType counts while preserving first-seen order.
  */
 final class MessageCounts {
-    private final Map<String, Count> counts = new LinkedHashMap<>();
+    private final Map<CountGroup, Map<String, Count>> counts = new EnumMap<>(CountGroup.class);
 
     /** Records one decoded message. */
     void add(FixMessage message, FixTagLookup lookup) {
@@ -21,14 +22,18 @@ final class MessageCounts {
         }
         FixDictionary.MessageDef def = lookup.message(msgType);
         String label = def == null ? null : def.name();
-        counts.computeIfAbsent(msgType, ignored -> new Count(label)).increment();
+        CountGroup group = CountGroup.from(def);
+        counts.computeIfAbsent(group, ignored -> new LinkedHashMap<>())
+                .computeIfAbsent(msgType, ignored -> new Count(label))
+                .increment();
     }
 
     /** Merges counts from a worker result. */
     void merge(MessageCounts other) {
-        other.counts.forEach((msgType, count) -> counts
+        other.counts.forEach((group, groupCounts) -> groupCounts.forEach((msgType, count) -> counts
+                .computeIfAbsent(group, ignored -> new LinkedHashMap<>())
                 .computeIfAbsent(msgType, ignored -> new Count(count.label))
-                .add(count.value));
+                .add(count.value)));
     }
 
     /** Prints the summary table unless no messages were decoded. */
@@ -38,9 +43,42 @@ final class MessageCounts {
         }
         out.println("----------------------------------------------");
         out.println("Message Counts:");
-        out.println("Message Type          Count  Name");
-        counts.forEach((msgType, count) -> out.printf("%-18s %7d  %s%n", msgType, count.value, count.label == null ? "" : count.label));
+        for (CountGroup group : CountGroup.values()) {
+            Map<String, Count> groupCounts = counts.get(group);
+            if (groupCounts != null && !groupCounts.isEmpty()) {
+                out.println(group.heading + ":");
+                out.println("Message Type          Count  Name");
+                groupCounts.forEach((msgType, count) ->
+                        out.printf("%-18s %7d  %s%n", msgType, count.value, count.label == null ? "" : count.label));
+                out.println();
+            }
+        }
         out.println();
+    }
+
+    /** Top-level message count buckets that mirror session/admin versus business traffic. */
+    private enum CountGroup {
+        SESSION_ADMIN("Session/Admin"),
+        BUSINESS("Business"),
+        UNKNOWN("Unknown");
+
+        private final String heading;
+
+        /** Creates a count bucket with its display heading. */
+        CountGroup(String heading) {
+            this.heading = heading;
+        }
+
+        /** Chooses a group from QuickFIX message metadata. */
+        private static CountGroup from(FixDictionary.MessageDef def) {
+            if (def == null) {
+                return UNKNOWN;
+            }
+            if ("admin".equalsIgnoreCase(def.category())) {
+                return SESSION_ADMIN;
+            }
+            return BUSINESS;
+        }
     }
 
     /** Mutable count holder reused by the map. */
