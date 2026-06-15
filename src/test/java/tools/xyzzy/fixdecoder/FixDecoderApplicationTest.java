@@ -72,6 +72,27 @@ class FixDecoderApplicationTest {
                         + "Pretty-print FIX log messages and inspect FIX dictionaries."
                         + separator
                         + separator));
+        assertTrue(captured.stdout().contains("-v, --version"));
+        assertFalse(captured.stdout().contains("-V, --version"));
+    }
+
+    /** Version output should use the lower-case short alias alongside the long option. */
+    @Test
+    void usesLowercaseShortVersionOption() {
+        Captured shortOption = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("-v")));
+        Captured longOption = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--version")));
+
+        assertTrue(shortOption.stdout().contains("fixdecoder 0.3.0 (java)"));
+        assertTrue(longOption.stdout().contains("fixdecoder 0.3.0 (java)"));
+    }
+
+    /** Upper-case -V should not be accepted as the version shortcut. */
+    @Test
+    void rejectsUppercaseShortVersionOption() {
+        CommandLine command = new CommandLine(new FixDecoderApplication());
+        command.setErr(new PrintWriter(new StringWriter()));
+
+        assertEquals(CommandLine.ExitCode.USAGE, command.execute("-V"));
     }
 
     /** Captures stdout around a CLI invocation. */

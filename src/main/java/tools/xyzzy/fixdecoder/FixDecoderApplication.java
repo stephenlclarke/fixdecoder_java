@@ -23,7 +23,7 @@ import picocli.CommandLine.Spec;
  */
 @Command(
         name = "fixdecoder",
-        mixinStandardHelpOptions = true,
+        mixinStandardHelpOptions = false,
         version = "fixdecoder 0.3.0 (java)",
         description = {
                 "",
@@ -33,6 +33,14 @@ import picocli.CommandLine.Spec;
 public final class FixDecoderApplication implements Callable<Integer> {
     @Spec
     private CommandSpec spec;
+
+    @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
+    @Option(names = {"-h", "--help"}, usageHelp = true, description = "Show this help message and exit.")
+    private boolean help;
+
+    @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
+    @Option(names = {"-v", "--version"}, versionHelp = true, description = "Print version information and exit.")
+    private boolean version;
 
     @Option(names = "--xml", description = "Load a custom FIX XML dictionary.")
     private final List<Path> xmlFiles = new ArrayList<>();
