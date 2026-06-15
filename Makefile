@@ -61,5 +61,5 @@ help:
 	  '  appendix-d-samples       -> regenerate Appendix D sample corpus' \
 	  '  repeating-group-samples  -> regenerate repeating-group sample corpus' \
 	  '  regen-example-readmes    -> regenerate example README pretty-print output' \
-	  '  regen-readme             -> regenerate root README usage and CLI examples' \
+	  '  regen-readme             -> regenerate root README Build It, usage, and CLI examples' \
 	  '  clean          -> remove Maven build outputs'

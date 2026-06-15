@@ -444,6 +444,71 @@ Order Summary:
 
 <!-- regen-readme:end --section=examples -->
 
+<!-- regen-readme:start --section=build-examples -->
+
+## Build it
+
+Build it from source. This requires `bash`, Java 21+, and the checked-in Maven wrapper.
+
+```bash
+❯ bash --version
+GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)
+Copyright (C) 2025 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+```
+
+```bash
+❯ java -version
+openjdk version "21.0.11" 2026-04-21
+OpenJDK Runtime Environment Homebrew (build 21.0.11)
+OpenJDK 64-Bit Server VM Homebrew (build 21.0.11, mixed mode, sharing)
+```
+
+Clone the git repo.
+
+```bash
+❯ git clone git@github.com:stephenlclarke/fixdecoder_java.git
+Cloning into 'fixdecoder_java'...
+...
+❯ cd fixdecoder_java
+```
+
+Then build it. Local builds compile the shaded jar, run scan-friendly compilation, and produce coverage.
+
+```bash
+❯ make clean build scan coverage build-release
+
+[INFO] Compiling Java sources with lint warnings as errors
+[INFO] Running unit tests and JaCoCo coverage checks
+[INFO] Building shaded runnable jar: target/fixdecoder-java-0.3.0.jar
+[INFO] BUILD SUCCESS
+```
+
+Build only the release-oriented runnable jar.
+
+```bash
+❯ make build-release
+
+[INFO] Building shaded runnable jar: target/fixdecoder-java-0.3.0.jar
+[INFO] BUILD SUCCESS
+```
+
+Run it (from the release build) and check the version details:
+
+```bash
+❯ java -jar target/fixdecoder-java-0.3.0.jar --version
+fixdecoder 0.3.0 (java)
+```
+
+Run the same build through the source-checkout wrapper:
+
+```bash
+❯ scripts/fixdecoder --version
+fixdecoder 0.3.0 (java)
+```
+
+<!-- regen-readme:end --section=build-examples -->
+
 ## Development
 
 The local workflow uses Java 21 and Maven.

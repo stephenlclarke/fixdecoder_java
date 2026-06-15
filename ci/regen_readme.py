@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,14 @@ USAGE = ROOT / "resources" / "messages" / "usage_en.txt"
 EXAMPLE_DIR = ROOT / "target" / "readme-examples"
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 SOH = "\x01"
+
+
+@dataclass(frozen=True)
+class BuildExample:
+    """A deterministic shell transcript for the generated Build it section."""
+
+    display_command: str
+    output: str
 
 
 @dataclass(frozen=True)
@@ -43,10 +52,11 @@ def main() -> int:
 
     ensure_java_app()
     original = README.read_text()
-    updated = replace_section(original, "usage", render_usage_section())
+    updated = replace_section(original, "build-examples", render_build_examples_section())
+    updated = replace_section(updated, "usage", render_usage_section())
     updated = replace_section(updated, "examples", render_examples_section())
     README.write_text(updated)
-    print(f"Updated {README.relative_to(ROOT)} with generated usage and CLI examples")
+    print(f"Updated {README.relative_to(ROOT)} with generated build, usage, and CLI examples")
     return 0
 
 
@@ -222,6 +232,106 @@ def render_usage_section() -> str:
     )
 
 
+def render_build_examples_section() -> str:
+    """Render generated build examples using the Rust README structure."""
+    examples = [
+        BuildExample(
+            "bash --version",
+            "\n".join(render_shell_command(("bash", "--version")).splitlines()[:3]),
+        ),
+        BuildExample(
+            "java -version",
+            "\n".join(render_shell_command(("java", "-version")).splitlines()[:3]),
+        ),
+        BuildExample(
+            "git clone git@github.com:stephenlclarke/fixdecoder_java.git",
+            "Cloning into 'fixdecoder_java'...\n...\n❯ cd fixdecoder_java",
+        ),
+        BuildExample(
+            "make clean build scan coverage build-release",
+            "\n".join(
+                [
+                    "",
+                    "[INFO] Compiling Java sources with lint warnings as errors",
+                    "[INFO] Running unit tests and JaCoCo coverage checks",
+                    "[INFO] Building shaded runnable jar: target/fixdecoder-java-0.3.0.jar",
+                    "[INFO] BUILD SUCCESS",
+                ]
+            ),
+        ),
+        BuildExample(
+            "make build-release",
+            "\n".join(
+                [
+                    "",
+                    "[INFO] Building shaded runnable jar: target/fixdecoder-java-0.3.0.jar",
+                    "[INFO] BUILD SUCCESS",
+                ]
+            ),
+        ),
+        BuildExample(
+            "java -jar target/fixdecoder-java-0.3.0.jar --version",
+            render_shell_command(("java", "-jar", "target/fixdecoder-java-0.3.0.jar", "--version")),
+        ),
+        BuildExample(
+            "scripts/fixdecoder --version",
+            render_shell_command(("scripts/fixdecoder", "--version")),
+        ),
+    ]
+
+    return "\n".join(
+        [
+            "<!-- regen-readme:start --section=build-examples -->",
+            "",
+            "## Build it",
+            "",
+            "Build it from source. This requires `bash`, Java 21+, and the checked-in Maven wrapper.",
+            "",
+            "```bash",
+            format_prompted_output(examples[0]),
+            "```",
+            "",
+            "```bash",
+            format_prompted_output(examples[1]),
+            "```",
+            "",
+            "Clone the git repo.",
+            "",
+            "```bash",
+            format_prompted_output(examples[2]),
+            "```",
+            "",
+            "Then build it. Local builds compile the shaded jar, run scan-friendly compilation, and produce coverage.",
+            "",
+            "```bash",
+            format_prompted_output(examples[3]),
+            "```",
+            "",
+            "Build only the release-oriented runnable jar.",
+            "",
+            "```bash",
+            format_prompted_output(examples[4]),
+            "```",
+            "",
+            "Run it (from the release build) and check the version details:",
+            "",
+            "```bash",
+            format_prompted_output(examples[5]),
+            "```",
+            "",
+            "Run the same build through the source-checkout wrapper:",
+            "",
+            "```bash",
+            format_prompted_output(examples[6]),
+            "```",
+            "",
+            "<!-- regen-readme:end --section=build-examples -->",
+            "",
+            "",
+        ]
+    )
+
+
 def render_examples_section() -> str:
     """Render generated command examples for the major user-facing options."""
     blocks = [
@@ -236,6 +346,27 @@ def render_examples_section() -> str:
         blocks.append(render_example_block(example))
     blocks.extend(["<!-- regen-readme:end --section=examples -->", "", ""])
     return "\n".join(blocks)
+
+
+def render_shell_command(command: tuple[str, ...]) -> str:
+    """Run a local command and return sanitized stdout plus stderr."""
+    result = subprocess.run(
+        list(command),
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=True,
+    )
+    return sanitise_output(result.stdout)
+
+
+def format_prompted_output(example: BuildExample) -> str:
+    """Format a shell command with the README prompt marker."""
+    body = f"❯ {example.display_command}"
+    if example.output:
+        body = f"{body}\n{example.output}"
+    return body
 
 
 def render_example_block(example: ReadmeExample) -> str:
