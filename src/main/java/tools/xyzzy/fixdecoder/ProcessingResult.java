@@ -8,8 +8,9 @@ import java.nio.file.Path;
 /**
  * Captures worker output location and counts so parallel file decoding can emit in argv order.
  *
+ * @param workingDirectory private temporary worker directory
  * @param output captured worker output file
  * @param counts message counts captured by the worker
  */
-record ProcessingResult(Path output, MessageCounts counts) {
+record ProcessingResult(Path workingDirectory, Path output, MessageCounts counts) {
 }

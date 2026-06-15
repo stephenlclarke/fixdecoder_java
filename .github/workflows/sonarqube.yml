@@ -39,13 +39,14 @@ jobs:
       - name: Build and test with coverage
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B verify
+        run: ./mvnw -B verify -Pcoverage
       - name: Verify JaCoCo coverage report
         run: test -s target/site/jacoco/jacoco.xml
       - name: Analyze with SonarQube
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >
-          ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          ./mvnw -B -Pcoverage
+          org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar
           -Dsonar.projectKey=stephenlclarke_fixdecoder_java
           -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml

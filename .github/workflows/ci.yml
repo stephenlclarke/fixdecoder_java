@@ -41,7 +41,7 @@ jobs:
       - name: Ensure FIX dictionaries
         run: bash -lc 'source ci/ci_helper.sh && download_fix_specs'
       - name: Verify
-        run: ./mvnw -B verify
+        run: ./mvnw -B verify -Pcoverage
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
         with:

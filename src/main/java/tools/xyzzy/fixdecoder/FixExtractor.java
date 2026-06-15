@@ -30,31 +30,39 @@ final class FixExtractor {
                 // No BeginString means this log line has no decodable FIX payload.
                 scanning = false;
             } else {
-                int end = findMessageEnd(normalised, start);
-                if (end < 0) {
-                    int nextStart = nextMessageStart(normalised, start);
-                    if (nextStart >= 0) {
-                        // A later BeginString before any checksum means this partial candidate is stale.
-                        search = nextStart;
-                        continue;
-                    }
-                    // A partial payload may be completed by a later follow-mode read, so stop here.
-                    tailStart = start;
+                ScanDecision decision = scanCandidate(normalised, start);
+                if (decision.action() == ScanAction.MESSAGE) {
+                    messages.add(normalised.substring(start, decision.position()));
+                    search = decision.position();
+                } else if (decision.action() == ScanAction.TAIL) {
+                    tailStart = decision.position();
                     scanning = false;
                 } else {
-                    int nestedStart = nextMessageStart(normalised, start);
-                    if (nestedStart >= 0 && nestedStart < end) {
-                        // Do not merge an abandoned partial payload with the next complete message.
-                        search = nestedStart;
-                        continue;
-                    }
-                    messages.add(normalised.substring(start, end));
-                    search = end;
+                    search = decision.position();
                 }
             }
         }
         String tail = tailStart < 0 ? "" : normalised.substring(tailStart);
         return new ExtractionResult(messages, tail);
+    }
+
+    /** Classifies a candidate BeginString as complete, partial, or stale. */
+    private ScanDecision scanCandidate(String line, int start) {
+        int end = findMessageEnd(line, start);
+        int nestedStart = nextMessageStart(line, start);
+        if (end < 0 && nestedStart >= 0) {
+            // A later BeginString before any checksum means this partial candidate is stale.
+            return new ScanDecision(ScanAction.SKIP, nestedStart);
+        }
+        if (end < 0) {
+            // A partial payload may be completed by a later follow-mode read, so stop here.
+            return new ScanDecision(ScanAction.TAIL, start);
+        }
+        if (nestedStart >= 0 && nestedStart < end) {
+            // Do not merge an abandoned partial payload with the next complete message.
+            return new ScanDecision(ScanAction.SKIP, nestedStart);
+        }
+        return new ScanDecision(ScanAction.MESSAGE, end);
     }
 
     /** Locates the SOH after tag 10 when a complete checksum field is present. */
@@ -116,5 +124,16 @@ final class FixExtractor {
 
     /** Extraction output containing complete messages plus a retained partial tail. */
     record ExtractionResult(List<String> messages, String tail) {
+    }
+
+    /** Candidate scan action used to keep extraction control flow simple. */
+    private enum ScanAction {
+        MESSAGE,
+        TAIL,
+        SKIP
+    }
+
+    /** Candidate scan result; position is an end index, tail start, or next search point. */
+    private record ScanDecision(ScanAction action, int position) {
     }
 }

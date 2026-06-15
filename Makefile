@@ -27,10 +27,10 @@ scan:
 	@$(MVN) -q -DskipTests compile
 
 coverage:
-	@$(MVN) verify
+	@$(MVN) verify -Pcoverage
 
 sonar:
-	@bash -lc 'source ci/ci_helper.sh && ensure_sonar_token && ensure_sonar_scanner && $(MVN) verify sonar:sonar'
+	@bash -lc 'source ci/ci_helper.sh && ensure_sonar_token && ensure_sonar_scanner && $(MVN) verify -Pcoverage org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar'
 
 clean:
 	@$(MVN) clean

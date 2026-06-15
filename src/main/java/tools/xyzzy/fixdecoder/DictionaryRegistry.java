@@ -14,10 +14,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * Loads built-in and custom FIX dictionaries and normalises user version input.
  */
 final class DictionaryRegistry {
+    private static final String FIX27 = "FIX27";
+    private static final String FIX30 = "FIX30";
+    private static final String FIX40 = "FIX40";
+
     private static final Map<String, String> APPL_VER_IDS = Map.ofEntries(
-            Map.entry("0", "FIX27"),
-            Map.entry("1", "FIX30"),
-            Map.entry("2", "FIX40"),
+            Map.entry("0", FIX27),
+            Map.entry("1", FIX30),
+            Map.entry("2", FIX40),
             Map.entry("3", "FIX41"),
             Map.entry("4", "FIX42"),
             Map.entry("5", "FIX43"),
@@ -48,15 +52,15 @@ final class DictionaryRegistry {
         for (String resource : BUILT_INS) {
             FixDictionary dictionary = parser.parseResource(resource, "built-in");
             loaded.add(dictionary);
-            if ("FIX40".equals(dictionary.key())) {
+            if (FIX40.equals(dictionary.key())) {
                 fix40 = dictionary;
             }
         }
         if (fix40 == null) {
             throw new IllegalStateException("embedded FIX40 dictionary did not load");
         }
-        dictionaries.put("FIX27", new DictionaryEntry("FIX27", fix40, "built-in alias of FIX40"));
-        dictionaries.put("FIX30", new DictionaryEntry("FIX30", fix40, "built-in alias of FIX40"));
+        dictionaries.put(FIX27, new DictionaryEntry(FIX27, fix40, "built-in alias of " + FIX40));
+        dictionaries.put(FIX30, new DictionaryEntry(FIX30, fix40, "built-in alias of " + FIX40));
         for (FixDictionary dictionary : loaded) {
             dictionaries.put(dictionary.key(), new DictionaryEntry(dictionary.key(), dictionary, "built-in"));
         }
