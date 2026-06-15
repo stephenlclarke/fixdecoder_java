@@ -42,7 +42,8 @@ final class FixFileProcessor {
     /** Processes stdin or paths according to the requested mode. */
     void process(ProcessingOptions options, PrintWriter out) throws IOException, InterruptedException, ExecutionException {
         if (options.files().isEmpty()) {
-            MessageCounts counts = processReader(new BufferedReader(new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8)), options, out, null);
+            MessageCounts counts = processReader(
+                    new BufferedReader(new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8)), options, out);
             if (!options.noCounts()) {
                 counts.print(out);
             }
@@ -76,7 +77,7 @@ final class FixFileProcessor {
                     streamWorkerOutput(result.output(), out);
                     merged.merge(result.counts());
                 } finally {
-                    Files.deleteIfExists(result.output());
+                    deleteWorkerOutput(result);
                 }
             }
             if (!options.noCounts()) {
@@ -110,97 +111,33 @@ final class FixFileProcessor {
     /** Processes one path and returns counts; path "-" is treated as stdin. */
     private MessageCounts processPath(Path path, ProcessingOptions options, PrintWriter out) throws IOException {
         if ("-".equals(path.toString())) {
-            return processReader(new BufferedReader(new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8)), options, out, null);
+            return processReader(
+                    new BufferedReader(new java.io.InputStreamReader(System.in, StandardCharsets.UTF_8)), options, out);
         }
         printFileHeader(path, out);
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            return processReader(reader, options, out, path);
+            return processReader(reader, options, out);
         }
     }
 
     /** Streams a reader line-by-line using one reusable message buffer. */
-    private MessageCounts processReader(
-            BufferedReader reader,
-            ProcessingOptions options,
-            PrintWriter out,
-            Path source) throws IOException {
-        FixMessage reusable = new FixMessage();
-        FixObfuscator obfuscator = new FixObfuscator(options.secret());
-        DictionarySession dictionarySession = new DictionarySession(registry, options.defaultDictionary());
-        OrderSummaryTracker summaryTracker = new OrderSummaryTracker();
-        MessageCounts counts = new MessageCounts();
-        String pending = "";
+    private MessageCounts processReader(BufferedReader reader, ProcessingOptions options, PrintWriter out)
+            throws IOException {
+        ProcessingContext context = new ProcessingContext(options, out);
         int lineNumber = 0;
-        while (!Thread.currentThread().isInterrupted()) {
+        boolean reading = true;
+        while (reading && !Thread.currentThread().isInterrupted()) {
             String line = reader.readLine();
             if (line == null) {
-                if (!options.follow() || !waitForMoreInput(out)) {
-                    break;
-                }
-                continue;
+                // At EOF, follow mode pauses for more input while one-shot mode finishes.
+                reading = options.follow() && waitForMoreInput(out);
+            } else {
+                lineNumber++;
+                context.processLine(line, lineNumber);
+                flushFollowOutput(options, out);
             }
-            lineNumber++;
-            pending = processLine(
-                    line,
-                    pending,
-                    lineNumber,
-                    options,
-                    out,
-                    reusable,
-                    obfuscator,
-                    dictionarySession,
-                    summaryTracker,
-                    counts);
-            flushFollowOutput(options, source, out);
         }
-        return counts;
-    }
-
-    /** Processes every complete FIX payload found on one input line. */
-    private String processLine(
-            String line,
-            String pending,
-            int lineNumber,
-            ProcessingOptions options,
-            PrintWriter out,
-            FixMessage reusable,
-            FixObfuscator obfuscator,
-            DictionarySession dictionarySession,
-            OrderSummaryTracker summaryTracker,
-            MessageCounts counts) {
-        String displayLine = obfuscator.obfuscateLine(pending + line, options.delimiter());
-        FixExtractor.ExtractionResult extracted = extractor.extract(displayLine, options.delimiter());
-        List<String> messages = extracted.messages();
-        for (String raw : messages) {
-            processMessage(raw, lineNumber, options, out, reusable, dictionarySession, summaryTracker, counts);
-        }
-        return options.follow() ? extracted.tail() : "";
-    }
-
-    /** Parses, validates, prints, and counts one raw FIX message. */
-    private void processMessage(
-            String raw,
-            int lineNumber,
-            ProcessingOptions options,
-            PrintWriter out,
-            FixMessage reusable,
-            DictionarySession dictionarySession,
-            OrderSummaryTracker summaryTracker,
-            MessageCounts counts) {
-        parser.parseInto(raw, reusable);
-        FixTagLookup lookup = dictionarySession.lookupFor(reusable);
-        ValidationReport report = validationReport(reusable, lookup, options);
-        if (options.summary()) {
-            printSummaryValidation(lineNumber, report, options, out);
-            summaryTracker.accept(reusable, lookup, out);
-            counts.add(reusable, lookup);
-            return;
-        }
-        if (options.validate() && report != null && !report.clean()) {
-            out.printf("Line %d: ", lineNumber);
-        }
-        prettifier.print(reusable, lookup, report, out);
-        counts.add(reusable, lookup);
+        return context.counts();
     }
 
     /** Runs validation only when the caller requested it. */
@@ -216,7 +153,7 @@ final class FixFileProcessor {
     }
 
     /** Flushes promptly in follow mode so tailed output appears immediately. */
-    private void flushFollowOutput(ProcessingOptions options, Path source, PrintWriter out) {
+    private void flushFollowOutput(ProcessingOptions options, PrintWriter out) {
         if (options.follow()) {
             out.flush();
         }
@@ -232,6 +169,12 @@ final class FixFileProcessor {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    /** Deletes captured worker output and the private worker directory that contained it. */
+    private void deleteWorkerOutput(ProcessingResult result) throws IOException {
+        Files.deleteIfExists(result.output());
+        Files.deleteIfExists(result.workingDirectory());
     }
 
     /** Streams captured worker output without materialising whole log output in memory. */
@@ -276,15 +219,82 @@ final class FixFileProcessor {
 
         @Override
         public ProcessingResult call() throws IOException {
-            Path output = Files.createTempFile("fixdecoder-java-", ".out");
+            Path workDir = Files.createTempDirectory(Path.of(".").toAbsolutePath().normalize(), ".fixdecoder-worker-");
+            Path output = Files.createTempFile(workDir, "output-", ".out");
             try (PrintWriter writer = new PrintWriter(Files.newBufferedWriter(output, StandardCharsets.UTF_8))) {
                 MessageCounts counts = processPath(file, options, writer);
                 writer.flush();
-                return new ProcessingResult(output, counts);
+                return new ProcessingResult(workDir, output, counts);
             } catch (IOException | RuntimeException ex) {
                 Files.deleteIfExists(output);
+                Files.deleteIfExists(workDir);
                 throw ex;
             }
+        }
+    }
+
+    /** Keeps per-reader mutable state together to minimise allocation on the decode path. */
+    private final class ProcessingContext {
+        private final ProcessingOptions options;
+        private final PrintWriter out;
+        private final FixMessage reusable = new FixMessage();
+        private final FixObfuscator obfuscator;
+        private final DictionarySession dictionarySession;
+        private final OrderSummaryTracker summaryTracker = new OrderSummaryTracker();
+        private final MessageCounts counts = new MessageCounts();
+        private String pending = "";
+
+        /** Creates a context with reusable decode collaborators for one input stream. */
+        private ProcessingContext(ProcessingOptions options, PrintWriter out) {
+            this.options = options;
+            this.out = out;
+            this.obfuscator = new FixObfuscator(options.secret());
+            this.dictionarySession = new DictionarySession(registry, options.defaultDictionary());
+        }
+
+        /** Processes every complete FIX payload found on one input line. */
+        private void processLine(String line, int lineNumber) {
+            String displayLine = obfuscator.obfuscateLine(pending + line, options.delimiter());
+            FixExtractor.ExtractionResult extracted = extractor.extract(displayLine, options.delimiter());
+            List<String> messages = extracted.messages();
+            for (String raw : messages) {
+                processMessage(raw, lineNumber);
+            }
+            pending = options.follow() ? extracted.tail() : "";
+        }
+
+        /** Parses, validates, prints, and counts one raw FIX message. */
+        private void processMessage(String raw, int lineNumber) {
+            parser.parseInto(raw, reusable);
+            FixTagLookup lookup = dictionarySession.lookupFor(reusable);
+            ValidationReport report = validationReport(reusable, lookup, options);
+            if (options.summary()) {
+                // Summary mode intentionally suppresses full tag output.
+                printSummaryMessage(lineNumber, lookup, report);
+            } else {
+                printDecodedMessage(lineNumber, lookup, report);
+            }
+            counts.add(reusable, lookup);
+        }
+
+        /** Prints compact summary output for one message. */
+        private void printSummaryMessage(int lineNumber, FixTagLookup lookup, ValidationReport report) {
+            printSummaryValidation(lineNumber, report, options, out);
+            summaryTracker.accept(reusable, lookup, out);
+        }
+
+        /** Prints full decoded output for one message. */
+        private void printDecodedMessage(int lineNumber, FixTagLookup lookup, ValidationReport report) {
+            if (options.validate() && report != null && !report.clean()) {
+                // Validation failures are prefixed with source line context.
+                out.printf("Line %d: ", lineNumber);
+            }
+            prettifier.print(reusable, lookup, report, out);
+        }
+
+        /** Returns counts accumulated by this processing context. */
+        private MessageCounts counts() {
+            return counts;
         }
     }
 }

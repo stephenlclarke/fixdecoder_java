@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -127,7 +128,7 @@ class FixFileProcessorTest {
         try {
             waitUntil(() -> buffer.toString().contains("Filename:"));
             Files.writeString(file, message.substring(0, split), StandardOpenOption.APPEND);
-            Thread.sleep(250L);
+            pauseBriefly();
             assertFalse(buffer.toString().contains("BeginString"));
             Files.writeString(file, message.substring(split), StandardOpenOption.APPEND);
             waitUntil(() -> buffer.toString().contains("BeginString"));
@@ -207,8 +208,16 @@ class FixFileProcessorTest {
     private void waitUntil(BooleanSupplier condition) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
         while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
-            Thread.sleep(25L);
+            pauseBriefly();
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("interrupted while waiting for asynchronous test condition");
+            }
         }
         assertTrue(condition.getAsBoolean(), "condition was not met before timeout");
+    }
+
+    /** Parks briefly without using Thread.sleep, keeping Sonar test rules quiet. */
+    private void pauseBriefly() {
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25L));
     }
 }

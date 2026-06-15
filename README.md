@@ -71,7 +71,7 @@ Behaviour notes:
 The local workflow uses Java 21 and Maven.
 
 ```bash
-./mvnw verify
+./mvnw verify -Pcoverage
 make build
 make test
 make coverage
