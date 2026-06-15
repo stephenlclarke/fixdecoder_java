@@ -6,9 +6,11 @@ package tools.xyzzy.fixdecoder;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Immutable in-memory representation of one QuickFIX XML dictionary.
@@ -92,6 +94,10 @@ final class FixDictionary {
 
     /** Looks up a message by name or MsgType. */
     MessageDef message(String nameOrType) {
+        // A malformed stream can reach validation without MsgType(35); treat that as no match.
+        if (nameOrType == null) {
+            return null;
+        }
         MessageDef byType = messagesByType.get(nameOrType);
         return byType == null ? messagesByName.get(nameOrType) : byType;
     }
@@ -177,6 +183,7 @@ final class FixDictionary {
         private final List<Integer> requiredTags;
         private final List<Integer> fieldOrder;
         private final Map<Integer, Integer> fieldOrderIndex;
+        private final Set<Integer> duplicateAllowedTags;
 
         /** Creates a message definition. */
         MessageDef(String name, String msgType, String category, List<Entry> entries) {
@@ -187,6 +194,7 @@ final class FixDictionary {
             this.requiredTags = new ArrayList<>();
             this.fieldOrder = new ArrayList<>();
             this.fieldOrderIndex = new HashMap<>();
+            this.duplicateAllowedTags = new HashSet<>();
         }
 
         /** Returns the message name. */
@@ -224,8 +232,13 @@ final class FixDictionary {
             return fieldOrderIndex.getOrDefault(tag, -1);
         }
 
+        /** Returns true when a tag can legitimately repeat inside a repeating group. */
+        boolean allowsDuplicateTag(int tag) {
+            return duplicateAllowedTags.contains(tag);
+        }
+
         /** Stores flattened required and ordering metadata after XML parsing. */
-        void setResolvedShape(List<Integer> required, List<Integer> order) {
+        void setResolvedShape(List<Integer> required, List<Integer> order, Set<Integer> allowedDuplicates) {
             requiredTags.clear();
             requiredTags.addAll(required);
             fieldOrder.clear();
@@ -234,6 +247,8 @@ final class FixDictionary {
             for (int index = 0; index < fieldOrder.size(); index++) {
                 fieldOrderIndex.put(fieldOrder.get(index), index);
             }
+            duplicateAllowedTags.clear();
+            duplicateAllowedTags.addAll(allowedDuplicates);
         }
     }
 

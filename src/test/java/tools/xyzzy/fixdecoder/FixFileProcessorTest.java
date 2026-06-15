@@ -5,20 +5,24 @@ package tools.xyzzy.fixdecoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -179,6 +183,62 @@ class FixFileProcessorTest {
         assertTrue(buffer.toString().contains(secret.toString()));
     }
 
+    /** Secret file mode should preserve CRLF and final-newline shape for unchanged bytes. */
+    @Test
+    void secretFilesPreserveOriginalLineEndings() throws Exception {
+        Path file = tempDir.resolve("orders-crlf.log");
+        String message = messageWithBody("35=A\u000149=BUY1\u000156=SELL1\u000198=0\u0001");
+        String original = "prefix\r\n" + message.substring(0, message.length() - 1) + "\r\nsuffix";
+        Files.write(file, original.getBytes(StandardCharsets.ISO_8859_1));
+        StringWriter buffer = new StringWriter();
+
+        new FixFileProcessor(new DictionaryRegistry()).writeSecretFiles(List.of(file), null, FixParser.SOH, new PrintWriter(buffer));
+
+        Path secret = tempDir.resolve("orders-crlf.secret.log");
+        String secretText = Files.readString(secret, StandardCharsets.ISO_8859_1);
+        assertTrue(secretText.startsWith("prefix\r\n"));
+        assertTrue(secretText.contains("\r\nsuffix"));
+        assertFalse(secretText.endsWith("\n"));
+        assertTrue(secretText.contains("SenderCompID0001"));
+    }
+
+    /** Oversized partial tails should be bounded to a fresh BeginString candidate. */
+    @Test
+    void boundsOversizedPendingTailToFreshBeginString() {
+        String stale = "8=FIX.4.4" + "A".repeat(FixFileProcessor.MAX_PENDING_CHARS + 1);
+        String fresh = "8=FIX.4.4\u00019=005\u0001";
+
+        FixFileProcessor.BoundedTail bounded = FixFileProcessor.boundedPendingTail(stale + fresh);
+
+        assertTrue(bounded.flushed().startsWith("8=FIX.4.4"));
+        assertEquals(fresh, bounded.tail());
+    }
+
+    /** Parallel processing should clean successful worker temp dirs when another worker fails. */
+    @Test
+    void cleansWorkerOutputsWhenParallelProcessingFails() throws Exception {
+        long before = workerDirectoryCount();
+        Path missing = tempDir.resolve("missing.log");
+        Path valid = tempDir.resolve("valid.log");
+        Files.writeString(valid, validMessage("0"));
+        DictionaryRegistry registry = new DictionaryRegistry();
+        ProcessingOptions options = new ProcessingOptions(
+                registry.resolve("44"),
+                FixParser.SOH,
+                false,
+                false,
+                true,
+                false,
+                false,
+                List.of(missing, valid));
+
+        assertThrows(
+                ExecutionException.class,
+                () -> new FixFileProcessor(registry).process(options, new PrintWriter(new StringWriter())));
+
+        assertEquals(before, workerDirectoryCount());
+    }
+
     /** Builds a valid message with a simple MsgType. */
     private String validMessage(String msgType) {
         return messageWithBody("35=" + msgType + "\u000149=S\u000156=T\u000134=1\u000152=20250101-00:00:00\u0001");
@@ -219,5 +279,14 @@ class FixFileProcessorTest {
     /** Parks briefly without using Thread.sleep, keeping Sonar test rules quiet. */
     private void pauseBriefly() {
         LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25L));
+    }
+
+    /** Counts worker directories in the repository root without deleting pre-existing files. */
+    private long workerDirectoryCount() throws Exception {
+        try (Stream<Path> paths = Files.list(Path.of(".").toAbsolutePath().normalize())) {
+            return paths
+                    .filter(path -> path.getFileName().toString().startsWith(".fixdecoder-worker-"))
+                    .count();
+        }
     }
 }

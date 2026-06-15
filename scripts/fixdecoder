@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 Steve Clarke <stephenlclarke@mac.com> - https://xyzzy.tools
+#
+# USAGE:
+#   fixdecoder [fixdecoder args...]
+#
+# Runs the packaged Java fixdecoder application.
+#
+# Place this script next to a `fixdecoder-java-*.jar`, keep it in `scripts/`
+# inside a source checkout after `make build`, or install it under `bin/` with
+# the jar under the sibling `lib/` directory.
+#
+# Environment:
+#   FIXDECODER_JAR  Use this jar instead of auto-discovering one.
+
+set -euo pipefail
+
+SELF_PATH="${BASH_SOURCE[0]:-$0}"
+readonly SELF_PATH
+SCRIPT_DIR="$(cd "$(dirname "$SELF_PATH")" && pwd)"
+readonly SCRIPT_DIR
+TARGET_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/target"
+readonly TARGET_DIR
+LIB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/lib"
+readonly LIB_DIR
+
+# Write an error and exit.
+function error() {
+  printf '%s\n' "$*" >&2
+  exit 1
+}
+
+# Require an executable to be available.
+function need() {
+  local command_name=$1
+
+  command -v "$command_name" >/dev/null 2>&1 || error "required command not found: ${command_name}"
+}
+
+# Find the newest runnable jar in one directory.
+function find_jar_in_dir() {
+  local directory=$1
+
+  [[ -d "$directory" ]] || return 0
+  find "$directory" \
+    -maxdepth 1 \
+    -type f \
+    -name 'fixdecoder-java-*.jar' \
+    ! -name 'original-*' \
+    -print 2>/dev/null | sort | tail -n 1
+}
+
+# Resolve the jar to execute, preferring explicit and colocated jars.
+function resolve_jar() {
+  local jar
+
+  if [[ -n "${FIXDECODER_JAR:-}" ]]; then
+    [[ -f "$FIXDECODER_JAR" ]] || error "FIXDECODER_JAR does not exist: ${FIXDECODER_JAR}"
+    printf '%s\n' "$FIXDECODER_JAR"
+    return
+  fi
+
+  for directory in "$SCRIPT_DIR" "$TARGET_DIR" "$LIB_DIR"; do
+    jar=$(find_jar_in_dir "$directory")
+    if [[ -n "$jar" ]]; then
+      printf '%s\n' "$jar"
+      return
+    fi
+  done
+
+  error "fixdecoder jar not found; set FIXDECODER_JAR or run make build"
+}
+
+# Run the application, replacing this wrapper process.
+function main() {
+  local jar
+
+  need java
+  jar=$(resolve_jar)
+  exec java -jar "$jar" "$@"
+}
+
+main "$@"

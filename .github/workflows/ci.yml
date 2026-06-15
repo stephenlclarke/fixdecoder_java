@@ -71,4 +71,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: fixdecoder-java-${{ matrix.os }}
-          path: target/fixdecoder-java-*.jar
+          path: |
+            target/fixdecoder-java-*.jar
+            scripts/fixdecoder

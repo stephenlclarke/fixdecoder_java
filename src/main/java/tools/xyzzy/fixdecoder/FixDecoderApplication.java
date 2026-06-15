@@ -25,7 +25,11 @@ import picocli.CommandLine.Spec;
         name = "fixdecoder",
         mixinStandardHelpOptions = true,
         version = "fixdecoder 0.3.0 (java)",
-        description = "Pretty-print FIX log messages and inspect FIX dictionaries.")
+        description = {
+                "",
+                "Pretty-print FIX log messages and inspect FIX dictionaries.",
+                ""
+        })
 public final class FixDecoderApplication implements Callable<Integer> {
     @Spec
     private CommandSpec spec;

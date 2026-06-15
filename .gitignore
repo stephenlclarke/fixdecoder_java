@@ -7,3 +7,6 @@ target/
 .SONAR_TOKEN
 dependency-reduced-pom.xml
 .mvn/wrapper/maven-wrapper.jar
+
+# Generated modernization/tool telemetry; not project source.
+.github/modernize/

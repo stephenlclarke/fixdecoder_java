@@ -11,6 +11,10 @@ import java.util.List;
  * Renders dictionary information in the same table-oriented style as the Rust CLI.
  */
 final class DictionaryDisplay {
+    private static final int MESSAGE_FIELD_INDENT = 8;
+    private static final int ROOT_COMPONENT_FIELD_INDENT = MESSAGE_FIELD_INDENT;
+    private static final int GROUP_CHILD_FIELD_INDENT = 6;
+    private static final int COMPONENT_LABEL_OUTDENT = 5;
     private static final Comparator<java.util.Map.Entry<String, String>> ENUM_BY_KEY =
             java.util.Map.Entry.comparingByKey();
 
@@ -84,7 +88,7 @@ final class DictionaryDisplay {
             return;
         }
         out.println("Component: " + Ansi.colorName(component.name(), colours));
-        printEntries(dictionary, component.entries(), 4, verbose, out);
+        printEntries(dictionary, component.entries(), ROOT_COMPONENT_FIELD_INDENT, verbose, out);
         out.flush();
     }
 
@@ -115,13 +119,13 @@ final class DictionaryDisplay {
                 Ansi.colorTag(message.msgType(), colours));
         if (includeHeader) {
             out.println("    Component: " + Ansi.colorName("Header", colours));
-            printEntries(dictionary, dictionary.header().entries(), 8, verbose, out);
+            printEntries(dictionary, dictionary.header().entries(), MESSAGE_FIELD_INDENT, verbose, out);
         }
         out.println("    Message: " + Ansi.colorName("Body", colours));
-        printEntries(dictionary, message.entries(), 8, verbose, out);
+        printEntries(dictionary, message.entries(), MESSAGE_FIELD_INDENT, verbose, out);
         if (includeTrailer) {
             out.println("    Component: " + Ansi.colorName("Trailer", colours));
-            printEntries(dictionary, dictionary.trailer().entries(), 8, verbose, out);
+            printEntries(dictionary, dictionary.trailer().entries(), MESSAGE_FIELD_INDENT, verbose, out);
         }
         out.flush();
     }
@@ -176,8 +180,8 @@ final class DictionaryDisplay {
         if (component == null) {
             return;
         }
-        out.printf("%sComponent: %s%n", spaces(indent), Ansi.colorName(component.name(), colours));
-        printEntries(dictionary, component.entries(), indent + 4, verbose, out);
+        out.printf("%sComponent: %s%n", spaces(componentLabelIndent(indent)), Ansi.colorName(component.name(), colours));
+        printEntries(dictionary, component.entries(), indent, verbose, out);
     }
 
     /** Prints a repeating group count field and its child entries. */
@@ -192,7 +196,7 @@ final class DictionaryDisplay {
         if (countField != null) {
             printField(countField, indent, group.required(), out);
         }
-        printEntries(dictionary, group.entries(), indent + 4, verbose, out);
+        printEntries(dictionary, group.entries(), indent + GROUP_CHILD_FIELD_INDENT, verbose, out);
     }
 
     /** Prints one field in the `tag: name (TYPE)` layout. */
@@ -219,6 +223,11 @@ final class DictionaryDisplay {
     /** Allocates indentation strings only in user-facing display paths. */
     private String spaces(int count) {
         return " ".repeat(Math.max(0, count));
+    }
+
+    /** Places component labels to the left of the field tag column for the current container. */
+    private int componentLabelIndent(int fieldIndent) {
+        return Math.max(0, fieldIndent - COMPONENT_LABEL_OUTDENT);
     }
 
 }

@@ -4,6 +4,7 @@
 package tools.xyzzy.fixdecoder;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +28,9 @@ final class FixFileProcessor {
     private static final DateTimeFormatter FILE_TIME =
             DateTimeFormatter.ofPattern("dd/MM/yy HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
     private static final long FOLLOW_SLEEP_MILLIS = 100L;
+    static final int MAX_PENDING_CHARS = 1_048_576;
+    private static final int COPY_BUFFER_CHARS = 8192;
+    private static final String BEGIN = "8=FIX";
 
     private final DictionaryRegistry registry;
     private final FixParser parser = new FixParser();
@@ -69,15 +73,15 @@ final class FixFileProcessor {
             for (Path file : options.files()) {
                 futures.add(executor.submit(new FileTask(file, options)));
             }
+            List<ProcessingResult> results = awaitWorkerResults(futures);
             MessageCounts merged = new MessageCounts();
-            for (Future<ProcessingResult> future : futures) {
-                ProcessingResult result = future.get();
-                try {
+            try {
+                for (ProcessingResult result : results) {
                     streamWorkerOutput(result.output(), out);
                     merged.merge(result.counts());
-                } finally {
-                    deleteWorkerOutput(result);
                 }
+            } finally {
+                deleteWorkerOutputs(results);
             }
             if (!options.noCounts()) {
                 merged.print(out);
@@ -93,16 +97,42 @@ final class FixFileProcessor {
             obfuscator.reset();
             Path output = secretPath(file, secretDir);
             Files.createDirectories(output.toAbsolutePath().getParent());
-            try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8);
-                    PrintWriter writer = new PrintWriter(Files.newBufferedWriter(output, StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    writer.println(obfuscator.obfuscateLine(line, delimiter));
-                }
+            try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.ISO_8859_1);
+                    BufferedWriter writer = Files.newBufferedWriter(output, StandardCharsets.ISO_8859_1)) {
+                writeSecretContent(reader, writer, obfuscator, delimiter);
             }
             out.println(output);
         }
         out.flush();
+    }
+
+    /** Writes an obfuscated copy while preserving original bytes for unchanged content. */
+    private void writeSecretContent(
+            BufferedReader reader,
+            BufferedWriter writer,
+            FixObfuscator obfuscator,
+            char delimiter)
+            throws IOException {
+        char[] buffer = new char[COPY_BUFFER_CHARS];
+        String pending = "";
+        int read;
+        while ((read = reader.read(buffer)) >= 0) {
+            String chunk = new String(buffer, 0, read);
+            String combined = pending.isEmpty() ? chunk : pending + chunk;
+            FixExtractor.ExtractionResult extracted = extractor.extract(combined, delimiter);
+            String stable = stablePrefix(combined, extracted.tail());
+            if (!stable.isEmpty()) {
+                writer.write(obfuscator.obfuscateLine(stable, delimiter));
+            }
+            BoundedTail bounded = boundedPendingTail(extracted.tail());
+            if (!bounded.flushed().isEmpty()) {
+                writer.write(bounded.flushed());
+            }
+            pending = bounded.tail();
+        }
+        if (!pending.isEmpty()) {
+            writer.write(pending);
+        }
     }
 
     /** Processes one path and returns counts; path "-" is treated as stdin. */
@@ -156,10 +186,72 @@ final class FixFileProcessor {
         }
     }
 
+    /** Waits for all workers so successful temp files can be cleaned even if one task fails. */
+    private List<ProcessingResult> awaitWorkerResults(List<Future<ProcessingResult>> futures)
+            throws InterruptedException, ExecutionException, IOException {
+        List<ProcessingResult> results = new ArrayList<>(futures.size());
+        ExecutionException failure = null;
+        for (Future<ProcessingResult> future : futures) {
+            try {
+                results.add(future.get());
+            } catch (ExecutionException ex) {
+                // Keep collecting later results so their temp files are not orphaned.
+                if (failure == null) {
+                    failure = ex;
+                }
+            } catch (InterruptedException ex) {
+                cancelWorkers(futures);
+                addCleanupSuppressed(ex, results);
+                throw ex;
+            }
+        }
+        if (failure != null) {
+            addCleanupSuppressed(failure, results);
+            throw failure;
+        }
+        return results;
+    }
+
+    /** Requests cancellation for all workers after an interrupted wait. */
+    private void cancelWorkers(List<Future<ProcessingResult>> futures) {
+        for (Future<ProcessingResult> future : futures) {
+            future.cancel(true);
+        }
+    }
+
+    /** Adds cleanup failures as suppressed exceptions on the primary worker failure. */
+    private void addCleanupSuppressed(Exception primary, List<ProcessingResult> results) {
+        try {
+            deleteWorkerOutputs(results);
+        } catch (IOException cleanup) {
+            primary.addSuppressed(cleanup);
+        }
+    }
+
     /** Deletes captured worker output and the private worker directory that contained it. */
     private void deleteWorkerOutput(ProcessingResult result) throws IOException {
         Files.deleteIfExists(result.output());
         Files.deleteIfExists(result.workingDirectory());
+    }
+
+    /** Deletes every captured worker output collected before a failure or replay. */
+    private void deleteWorkerOutputs(List<ProcessingResult> results) throws IOException {
+        IOException failure = null;
+        for (ProcessingResult result : results) {
+            try {
+                deleteWorkerOutput(result);
+            } catch (IOException ex) {
+                // Try every path so one stale file does not hide other cleanup work.
+                if (failure == null) {
+                    failure = ex;
+                } else {
+                    failure.addSuppressed(ex);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
     /** Streams captured worker output without materialising whole log output in memory. */
@@ -190,6 +282,24 @@ final class FixFileProcessor {
         int dot = name.lastIndexOf('.');
         String secretName = dot > 0 ? name.substring(0, dot) + ".secret" + name.substring(dot) : name + ".secret";
         return secretDir == null ? file.resolveSibling(secretName) : secretDir.resolve(secretName);
+    }
+
+    /** Returns content before the retained extraction tail. */
+    private String stablePrefix(String content, String tail) {
+        return tail.isEmpty() ? content : content.substring(0, content.length() - tail.length());
+    }
+
+    /** Bounds retained partial FIX payloads so follow mode cannot grow memory forever. */
+    static BoundedTail boundedPendingTail(String tail) {
+        if (tail.length() <= MAX_PENDING_CHARS) {
+            return new BoundedTail("", tail);
+        }
+        int earliestKept = tail.length() - MAX_PENDING_CHARS;
+        int lastBegin = tail.lastIndexOf(BEGIN);
+        if (lastBegin >= earliestKept) {
+            return new BoundedTail(tail.substring(0, lastBegin), tail.substring(lastBegin));
+        }
+        return new BoundedTail(tail, "");
     }
 
     /** Worker task used by parallel multi-file processing. */
@@ -239,13 +349,14 @@ final class FixFileProcessor {
 
         /** Processes every complete FIX payload found on one input line. */
         private void processLine(String line, int lineNumber) {
-            String displayLine = obfuscator.obfuscateLine(pending + line, options.delimiter());
+            String input = pending.isEmpty() ? line : pending + line;
+            String displayLine = obfuscator.obfuscateLine(input, options.delimiter());
             FixExtractor.ExtractionResult extracted = extractor.extract(displayLine, options.delimiter());
             List<String> messages = extracted.messages();
             for (String raw : messages) {
                 processMessage(raw, lineNumber);
             }
-            pending = options.follow() ? extracted.tail() : "";
+            pending = options.follow() ? boundedPendingTail(extracted.tail()).tail() : "";
         }
 
         /** Parses, validates, prints, and counts one raw FIX message. */
@@ -293,5 +404,9 @@ final class FixFileProcessor {
         private MessageCounts counts() {
             return counts;
         }
+    }
+
+    /** Retained tail plus any stale prefix that can be flushed unchanged or dropped. */
+    record BoundedTail(String flushed, String tail) {
     }
 }

@@ -60,6 +60,20 @@ class FixDecoderApplicationTest {
         assertEquals(CommandLine.ExitCode.USAGE, command.execute("--info", "--colour=maybe"));
     }
 
+    /** Help output should visually separate the one-line command description. */
+    @Test
+    void separatesDescriptionInHelpOutput() {
+        Captured captured = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--help")));
+        String separator = System.lineSeparator();
+
+        assertTrue(captured.stdout().contains(
+                separator
+                        + separator
+                        + "Pretty-print FIX log messages and inspect FIX dictionaries."
+                        + separator
+                        + separator));
+    }
+
     /** Captures stdout around a CLI invocation. */
     private Captured capture(Runnable runnable) {
         PrintStream originalOut = System.out;

@@ -9,8 +9,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import org.w3c.dom.Document;
@@ -125,10 +127,11 @@ final class DictionaryXmlParser {
         for (FixDictionary.MessageDef message : dictionary.messages()) {
             List<Integer> required = new ArrayList<>();
             List<Integer> order = new ArrayList<>();
-            collectShape(dictionary, dictionary.header().entries(), required, order);
-            collectShape(dictionary, message.entries(), required, order);
-            collectShape(dictionary, dictionary.trailer().entries(), required, order);
-            message.setResolvedShape(dedupe(required), dedupe(order));
+            Set<Integer> allowedDuplicates = new LinkedHashSet<>();
+            collectShape(dictionary, dictionary.header().entries(), true, false, required, order, allowedDuplicates);
+            collectShape(dictionary, message.entries(), true, false, required, order, allowedDuplicates);
+            collectShape(dictionary, dictionary.trailer().entries(), true, false, required, order, allowedDuplicates);
+            message.setResolvedShape(dedupe(required), dedupe(order), allowedDuplicates);
         }
     }
 
@@ -136,16 +139,33 @@ final class DictionaryXmlParser {
     private void collectShape(
             FixDictionary dictionary,
             List<FixDictionary.Entry> entries,
+            boolean requiredParent,
+            boolean insideGroup,
             List<Integer> required,
-            List<Integer> order) {
+            List<Integer> order,
+            Set<Integer> allowedDuplicates) {
         for (FixDictionary.Entry entry : entries) {
             switch (entry) {
                 case FixDictionary.FieldEntry(FixDictionary.FieldRef(String fieldName, boolean fieldRequired)) ->
-                        collectFieldShape(dictionary, fieldName, fieldRequired, required, order);
-                case FixDictionary.ComponentEntry(FixDictionary.ComponentRef(String componentName, boolean ignored)) ->
-                        collectComponentShape(dictionary, componentName, required, order);
+                        collectFieldShape(
+                                dictionary,
+                                fieldName,
+                                requiredParent && fieldRequired,
+                                insideGroup,
+                                required,
+                                order,
+                                allowedDuplicates);
+                case FixDictionary.ComponentEntry(FixDictionary.ComponentRef(String componentName, boolean componentRequired)) ->
+                        collectComponentShape(
+                                dictionary,
+                                componentName,
+                                requiredParent && componentRequired,
+                                insideGroup,
+                                required,
+                                order,
+                                allowedDuplicates);
                 case FixDictionary.GroupEntry(FixDictionary.GroupDef group) ->
-                        collectGroupShape(dictionary, group, required, order);
+                        collectGroupShape(dictionary, group, requiredParent, insideGroup, required, order, allowedDuplicates);
             }
         }
     }
@@ -155,14 +175,19 @@ final class DictionaryXmlParser {
             FixDictionary dictionary,
             String fieldName,
             boolean fieldRequired,
+            boolean insideGroup,
             List<Integer> required,
-            List<Integer> order) {
+            List<Integer> order,
+            Set<Integer> allowedDuplicates) {
         FixDictionary.FieldDef field = dictionary.field(fieldName);
         // Unknown field references are ignored so custom dictionaries can be permissive.
         if (field == null) {
             return;
         }
         order.add(field.number());
+        if (insideGroup) {
+            allowedDuplicates.add(field.number());
+        }
         if (fieldRequired) {
             required.add(field.number());
         }
@@ -172,12 +197,15 @@ final class DictionaryXmlParser {
     private void collectComponentShape(
             FixDictionary dictionary,
             String componentName,
+            boolean componentRequired,
+            boolean insideGroup,
             List<Integer> required,
-            List<Integer> order) {
+            List<Integer> order,
+            Set<Integer> allowedDuplicates) {
         FixDictionary.ComponentDef component = dictionary.component(componentName);
         // Components expand inline because the runtime validator works with tags.
         if (component != null) {
-            collectShape(dictionary, component.entries(), required, order);
+            collectShape(dictionary, component.entries(), componentRequired, insideGroup, required, order, allowedDuplicates);
         }
     }
 
@@ -185,11 +213,28 @@ final class DictionaryXmlParser {
     private void collectGroupShape(
             FixDictionary dictionary,
             FixDictionary.GroupDef group,
+            boolean requiredParent,
+            boolean insideGroup,
             List<Integer> required,
-            List<Integer> order) {
+            List<Integer> order,
+            Set<Integer> allowedDuplicates) {
         // The group name is the NumInGroup field in QuickFIX XML.
-        collectFieldShape(dictionary, group.name(), group.required(), required, order);
-        collectShape(dictionary, group.entries(), required, order);
+        collectFieldShape(
+                dictionary,
+                group.name(),
+                requiredParent && group.required(),
+                insideGroup,
+                required,
+                order,
+                allowedDuplicates);
+        collectShape(
+                dictionary,
+                group.entries(),
+                requiredParent && group.required(),
+                true,
+                required,
+                order,
+                allowedDuplicates);
     }
 
     /** Deduplicates tags while preserving first-seen dictionary order. */

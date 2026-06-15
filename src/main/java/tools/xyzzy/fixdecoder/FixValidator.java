@@ -10,6 +10,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,24 +32,23 @@ final class FixValidator {
         return report;
     }
 
-    /** Scans fields once, checking existence, duplicate tags, and dictionary type constraints. */
+    /** Scans fields once, checking existence and dictionary type constraints. */
     private FieldScan scanFields(FixMessage message, FixTagLookup lookup, ValidationReport report) {
         Map<Integer, FixField> lastByTag = new HashMap<>();
         Set<Integer> seen = new HashSet<>();
-        boolean duplicateDetected = false;
+        Set<Integer> duplicateTags = new LinkedHashSet<>();
 
         for (FixField field : message.fields()) {
             if (!lookup.hasTag(field.tag())) {
                 report.add(field.tag(), "Unknown tag " + field.tag() + " in " + lookup.dictionary().key());
             }
             if (!seen.add(field.tag())) {
-                duplicateDetected = true;
-                report.add(field.tag(), "Duplicate tag " + field.tag() + " encountered");
+                duplicateTags.add(field.tag());
             }
             lastByTag.put(field.tag(), field);
             validateType(field, lookup, report);
         }
-        return new FieldScan(lastByTag, duplicateDetected);
+        return new FieldScan(lastByTag, duplicateTags);
     }
 
     /** Validates message-level required tags and dictionary ordering. */
@@ -60,10 +60,21 @@ final class FixValidator {
         String msgType = value(scan.lastByTag(), 35);
         FixDictionary.MessageDef def = lookup.message(msgType);
         if (def == null) {
+            reportDuplicateTags(report, scan, null);
             report.add(35, msgType == null ? "Missing required tag 35 (MsgType)" : "Unknown MsgType: " + msgType);
         } else {
+            reportDuplicateTags(report, scan, def);
             validateRequiredTags(message, lookup, report, def);
             validateOrderingWhenUnique(message, report, scan, def);
+        }
+    }
+
+    /** Reports duplicates unless the dictionary allows the tag to repeat inside a repeating group. */
+    private void reportDuplicateTags(ValidationReport report, FieldScan scan, FixDictionary.MessageDef def) {
+        for (Integer tag : scan.duplicateTags()) {
+            if (def == null || !def.allowsDuplicateTag(tag)) {
+                report.add(tag, "Duplicate tag " + tag + " encountered");
+            }
         }
     }
 
@@ -86,7 +97,7 @@ final class FixValidator {
             ValidationReport report,
             FieldScan scan,
             FixDictionary.MessageDef def) {
-        if (!scan.duplicateDetected()) {
+        if (scan.duplicateTags().isEmpty()) {
             validateOrdering(message, def, report);
         }
     }
@@ -237,6 +248,6 @@ final class FixValidator {
     }
 
     /** Result of one pass over message fields. */
-    private record FieldScan(Map<Integer, FixField> lastByTag, boolean duplicateDetected) {
+    private record FieldScan(Map<Integer, FixField> lastByTag, Set<Integer> duplicateTags) {
     }
 }
