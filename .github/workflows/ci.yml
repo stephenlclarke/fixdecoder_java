@@ -35,8 +35,7 @@ jobs:
           cache: maven
       - name: Lint workflow YAML
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install yamllint
+          python3 -m pip install yamllint==1.37.1
           yamllint .github/workflows
       - name: Ensure FIX dictionaries
         run: bash -lc 'source ci/ci_helper.sh && download_fix_specs'

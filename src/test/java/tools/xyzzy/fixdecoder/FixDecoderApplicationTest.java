@@ -64,8 +64,8 @@ class FixDecoderApplicationTest {
     private Captured capture(Runnable runnable) {
         PrintStream originalOut = System.out;
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
-        try {
-            System.setOut(new PrintStream(stdout, true, StandardCharsets.UTF_8));
+        try (PrintStream capturedOut = new PrintStream(stdout, true, StandardCharsets.UTF_8)) {
+            System.setOut(capturedOut);
             runnable.run();
             return new Captured(stdout.toString(StandardCharsets.UTF_8));
         } finally {

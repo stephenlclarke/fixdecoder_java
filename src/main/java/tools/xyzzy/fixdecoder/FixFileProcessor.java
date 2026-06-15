@@ -64,8 +64,7 @@ final class FixFileProcessor {
         }
 
         int workers = Math.min(options.files().size(), Runtime.getRuntime().availableProcessors());
-        ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, workers));
-        try {
+        try (ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, workers))) {
             List<Future<ProcessingResult>> futures = new ArrayList<>();
             for (Path file : options.files()) {
                 futures.add(executor.submit(new FileTask(file, options)));
@@ -83,8 +82,6 @@ final class FixFileProcessor {
             if (!options.noCounts()) {
                 merged.print(out);
             }
-        } finally {
-            executor.shutdownNow();
         }
         out.flush();
     }
@@ -138,18 +135,6 @@ final class FixFileProcessor {
             }
         }
         return context.counts();
-    }
-
-    /** Runs validation only when the caller requested it. */
-    private ValidationReport validationReport(FixMessage message, FixTagLookup lookup, ProcessingOptions options) {
-        return options.validate() ? validator.validate(message, lookup) : null;
-    }
-
-    /** Prints validation failures in summary mode, where no full prettified message follows. */
-    private void printSummaryValidation(int lineNumber, ValidationReport report, ProcessingOptions options, PrintWriter out) {
-        if (options.validate() && report != null && !report.clean()) {
-            out.printf("Line %d: %s%n", lineNumber, String.join("; ", report.errors()));
-        }
     }
 
     /** Flushes promptly in follow mode so tailed output appears immediately. */
@@ -267,7 +252,7 @@ final class FixFileProcessor {
         private void processMessage(String raw, int lineNumber) {
             parser.parseInto(raw, reusable);
             FixTagLookup lookup = dictionarySession.lookupFor(reusable);
-            ValidationReport report = validationReport(reusable, lookup, options);
+            ValidationReport report = validationReport(lookup);
             if (options.summary()) {
                 // Summary mode intentionally suppresses full tag output.
                 printSummaryMessage(lineNumber, lookup, report);
@@ -279,7 +264,7 @@ final class FixFileProcessor {
 
         /** Prints compact summary output for one message. */
         private void printSummaryMessage(int lineNumber, FixTagLookup lookup, ValidationReport report) {
-            printSummaryValidation(lineNumber, report, options, out);
+            printSummaryValidation(lineNumber, report);
             summaryTracker.accept(reusable, lookup, out);
         }
 
@@ -290,6 +275,18 @@ final class FixFileProcessor {
                 out.printf("Line %d: ", lineNumber);
             }
             prettifier.print(reusable, lookup, report, out);
+        }
+
+        /** Runs validation only when the caller requested it. */
+        private ValidationReport validationReport(FixTagLookup lookup) {
+            return options.validate() ? validator.validate(reusable, lookup) : null;
+        }
+
+        /** Prints validation failures in summary mode, where no full prettified message follows. */
+        private void printSummaryValidation(int lineNumber, ValidationReport report) {
+            if (options.validate() && report != null && !report.clean()) {
+                out.printf("Line %d: %s%n", lineNumber, String.join("; ", report.errors()));
+            }
         }
 
         /** Returns counts accumulated by this processing context. */
