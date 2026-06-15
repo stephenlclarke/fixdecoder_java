@@ -20,9 +20,29 @@
 
 # Steve's FIX Decoder / logfile prettify utility
 
-This repository is the Java implementation of [fixdecoder_rs](https://github.com/stephenlclarke/fixdecoder_rs). It keeps the command-line surface, embedded FIX dictionaries, sample corpus, documentation assets, SonarCloud analysis, and CI/CD flow aligned with the Rust version while using an object-oriented Java design.
+This is my Java implementation of an "all-singing / all-dancing" utility to pretty-print logfiles containing FIX Protocol messages while keeping the command-line surface, embedded FIX dictionaries, sample corpus, documentation assets, SonarQube Code Quality metrics, and CI/CD flow aligned with the [Rust](https://github.com/stephenlclarke/fixdecoder_rs) version.
 
-The implementation uses immutable dictionary metadata, reusable mutable FIX message buffers, streaming NIO file processing, concurrent multi-file decoding, and focused unit tests with JaCoCo coverage.
+I have written utilities like this in past in [Java](https://github.com/stephenlclarke/fixdecoder_java), Python, C, C++, [go](https://github.com/stephenlclarke/fixdecoder_go) and even in Bash/Awk!! Rust remains my favourite, but this Java version is fully object-oriented and keeps the same output shape while leaning into immutable dictionary metadata, reusable mutable FIX message buffers, streaming NIO file processing, concurrent multi-file decoding, and focused unit tests with JaCoCo coverage.
+
+![repo title](docs/example.png)
+
+---
+
+<p align="center">
+  <a href="https://buy.stripe.com/8x23cvaHjaXzdg30Ni77O00">
+    <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-❤️-brightgreen?style=for-the-badge&logo=buymeacoffee&logoColor=white" alt="Buy Me a Coffee">
+  </a>
+  &nbsp;
+  <a href="https://github.com/stephenlclarke/fixdecoder_java/discussions">
+    <img src="https://img.shields.io/badge/Leave%20a%20Comment-💬-blue?style=for-the-badge" alt="Leave a Comment">
+  </a>
+</p>
+
+<p align="center">
+  <sub>☕ If you found this project useful, consider buying me a coffee or dropping a comment — it keeps the caffeine and ideas flowing! 😄</sub>
+</p>
+
+---
 
 ## What is it
 
