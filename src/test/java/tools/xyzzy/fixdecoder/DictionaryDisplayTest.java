@@ -96,6 +96,38 @@ class DictionaryDisplayTest {
                 "                80: AllocQty (QTY)")));
     }
 
+    /** Standalone component mode should start nearer the left edge than message body mode. */
+    @Test
+    void printComponentUsesCompactRootIndent() {
+        DictionaryRegistry registry = new DictionaryRegistry();
+        StringWriter buffer = new StringWriter();
+
+        new DictionaryDisplay(registry, false).printComponent(
+                registry.resolve("44"),
+                "PreAllocGrp",
+                false,
+                new PrintWriter(buffer));
+
+        assertTrue(buffer.toString().contains(String.join(
+                "\n",
+                "Component: PreAllocGrp",
+                "      78: NoAllocs (NUMINGROUP)",
+                "            79: AllocAccount (STRING)",
+                "           661: AllocAcctIDSource (INT)",
+                "           736: AllocSettlCurrency (CURRENCY)",
+                "           467: IndividualAllocID (STRING)",
+                "     Component: NestedParties",
+                "           539: NoNestedPartyIDs (NUMINGROUP)",
+                "                 524: NestedPartyID (STRING)",
+                "                 525: NestedPartyIDSource (CHAR)",
+                "                 538: NestedPartyRole (INT)",
+                "           Component: NstdPtysSubGrp",
+                "                 804: NoNestedPartySubIDs (NUMINGROUP)",
+                "                       545: NestedPartySubID (STRING)",
+                "                       805: NestedPartySubIDType (INT)",
+                "            80: AllocQty (QTY)")));
+    }
+
     /** List modes and missing items should produce deterministic output. */
     @Test
     void listAndMissingModesReturnHelpfulOutput() {

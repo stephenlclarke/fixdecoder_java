@@ -12,7 +12,7 @@ import java.util.List;
  */
 final class DictionaryDisplay {
     private static final int MESSAGE_FIELD_INDENT = 8;
-    private static final int ROOT_COMPONENT_FIELD_INDENT = MESSAGE_FIELD_INDENT;
+    private static final int ROOT_COMPONENT_FIELD_INDENT = 4;
     private static final int GROUP_CHILD_FIELD_INDENT = 6;
     private static final int COMPONENT_LABEL_OUTDENT = 5;
     private static final Comparator<java.util.Map.Entry<String, String>> ENUM_BY_KEY =
