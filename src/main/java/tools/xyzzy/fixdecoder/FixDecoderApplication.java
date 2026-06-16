@@ -4,7 +4,9 @@
 package tools.xyzzy.fixdecoder;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,12 +72,14 @@ public final class FixDecoderApplication implements Callable<Integer> {
     private static final int ORDER_SECRET_DIR = 250;
     private static final int ORDER_HELP = 900;
     private static final int ORDER_VERSION = 910;
+    private static final String USAGE_RESOURCE = "/messages/usage_en.txt";
+    private static final String USAGE_TEXT = loadUsageText();
 
     @Spec
     private CommandSpec spec;
 
     @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
-    @Option(names = {"-h", "--help"}, usageHelp = true, order = ORDER_HELP, description = "Show this help message and exit.")
+    @Option(names = {"-h", "--help"}, order = ORDER_HELP, description = "Show this help message and exit.")
     private boolean help;
 
     @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
@@ -182,6 +186,12 @@ public final class FixDecoderApplication implements Callable<Integer> {
     /** Routes dictionary inspection, secret-file generation, or streaming decode. */
     @Override
     public Integer call() throws IOException, InterruptedException, ExecutionException {
+        PrintWriter out = spec.commandLine().getOut();
+        if (help) {
+            printUsage(out);
+            return 0;
+        }
+
         DictionaryRegistry registry = new DictionaryRegistry();
         for (Path xml : xmlFiles) {
             registry.register(xml);
@@ -189,7 +199,6 @@ public final class FixDecoderApplication implements Callable<Integer> {
 
         FixDictionary selected = registry.resolve(fixVersion);
         boolean colours = coloursEnabled();
-        PrintWriter out = spec.commandLine().getOut();
 
         DictionaryDisplay display = new DictionaryDisplay(registry, colours);
         if (info) {
@@ -226,6 +235,25 @@ public final class FixDecoderApplication implements Callable<Integer> {
                 List.copyOf(files));
         processor.process(options, out);
         return 0;
+    }
+
+    private static String loadUsageText() {
+        try (InputStream in = FixDecoderApplication.class.getResourceAsStream(USAGE_RESOURCE)) {
+            if (in == null) {
+                throw new IllegalStateException("missing usage resource: " + USAGE_RESOURCE);
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new IllegalStateException("failed to load usage resource: " + USAGE_RESOURCE, ex);
+        }
+    }
+
+    private static void printUsage(PrintWriter out) {
+        out.print(USAGE_TEXT);
+        if (!USAGE_TEXT.endsWith("\n")) {
+            out.println();
+        }
+        out.flush();
     }
 
     /** Converts blank optional values from picocli into null. */

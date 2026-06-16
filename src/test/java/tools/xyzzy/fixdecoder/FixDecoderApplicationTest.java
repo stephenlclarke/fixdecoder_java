@@ -73,6 +73,7 @@ class FixDecoderApplicationTest {
                         + separator
                         + separator));
         assertTrue(captured.stdout().contains("-v, --version"));
+        assertTrue(captured.stdout().contains("Command line option examples:"));
         assertFalse(captured.stdout().contains("-V, --version"));
         assertOptionOrder(captured.stdout(),
                 "--xml",

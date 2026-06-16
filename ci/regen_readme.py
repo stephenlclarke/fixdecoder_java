@@ -679,7 +679,7 @@ def replace_section(markdown: str, section: str, block: str) -> str:
         re.S,
     )
     if section_re.search(markdown):
-        return section_re.sub(block, markdown)
+        return section_re.sub(lambda _: block, markdown)
 
     anchor = "\n## Development"
     if anchor in markdown:
@@ -694,7 +694,7 @@ def replace_or_move_section(markdown: str, section: str, block: str, anchor: str
         rf"<!-- regen-readme:end --section={re.escape(section)} -->\n*",
         re.S,
     )
-    without_existing = section_re.sub("", markdown)
+    without_existing = section_re.sub(lambda _: "", markdown)
     if anchor in without_existing:
         return without_existing.replace(anchor, f"\n{block}{anchor.lstrip()}", 1)
     return f"{without_existing.rstrip()}\n\n{block}"
