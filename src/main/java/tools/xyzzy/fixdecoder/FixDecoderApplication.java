@@ -24,102 +24,150 @@ import picocli.CommandLine.Spec;
 @Command(
         name = "fixdecoder",
         mixinStandardHelpOptions = false,
+        sortOptions = false,
         version = "fixdecoder 0.3.0 (java)",
+        customSynopsis = {
+                "fixdecoder [--xml=<xmlFiles>]... [--fix=<fixVersion>] [--info]",
+                "           [--message[=<message>]] [--component[=<component>]]",
+                "           [--tag[=<tag>]] [--column] [--verbose] [--header] [--trailer]",
+                "           [--colour[=<colour>]] [--delimiter=<delimiter>] [--style=<style>]",
+                "           [--plain] [--number] [--paging=<paging>] [--pager=<pager>]",
+                "           [--nowrap] [--follow] [--validate] [--secret] [--secret-files]",
+                "           [--summary] [--nocounts] [--secret-dir=<secretDir>]",
+                "           [--help] [--version]",
+                "           [<files>...]"
+        },
         description = {
                 "",
                 "Pretty-print FIX log messages and inspect FIX dictionaries.",
                 ""
         })
 public final class FixDecoderApplication implements Callable<Integer> {
+    private static final int ORDER_XML = 10;
+    private static final int ORDER_FIX = 20;
+    private static final int ORDER_INFO = 30;
+    private static final int ORDER_MESSAGE = 40;
+    private static final int ORDER_COMPONENT = 50;
+    private static final int ORDER_TAG = 60;
+    private static final int ORDER_COLUMN = 70;
+    private static final int ORDER_VERBOSE = 80;
+    private static final int ORDER_HEADER = 90;
+    private static final int ORDER_TRAILER = 100;
+    private static final int ORDER_COLOUR = 110;
+    private static final int ORDER_DELIMITER = 120;
+    private static final int ORDER_STYLE = 130;
+    private static final int ORDER_PLAIN = 140;
+    private static final int ORDER_NUMBER = 150;
+    private static final int ORDER_PAGING = 160;
+    private static final int ORDER_PAGER = 170;
+    private static final int ORDER_NOWRAP = 180;
+    private static final int ORDER_FOLLOW = 190;
+    private static final int ORDER_VALIDATE = 200;
+    private static final int ORDER_SECRET = 210;
+    private static final int ORDER_SECRET_FILES = 220;
+    private static final int ORDER_SUMMARY = 230;
+    private static final int ORDER_NOCOUNTS = 240;
+    private static final int ORDER_SECRET_DIR = 250;
+    private static final int ORDER_HELP = 900;
+    private static final int ORDER_VERSION = 910;
+
     @Spec
     private CommandSpec spec;
 
     @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
-    @Option(names = {"-h", "--help"}, usageHelp = true, description = "Show this help message and exit.")
+    @Option(names = {"-h", "--help"}, usageHelp = true, order = ORDER_HELP, description = "Show this help message and exit.")
     private boolean help;
 
     @SuppressWarnings("java:S1068") // picocli reads this field reflectively.
-    @Option(names = {"-v", "--version"}, versionHelp = true, description = "Print version information and exit.")
+    @Option(names = {"-v", "--version"}, versionHelp = true, order = ORDER_VERSION, description = "Print version information and exit.")
     private boolean version;
 
-    @Option(names = "--xml", description = "Load a custom FIX XML dictionary.")
+    @Option(names = "--xml", order = ORDER_XML, description = "Load a custom FIX XML dictionary.")
     private final List<Path> xmlFiles = new ArrayList<>();
 
-    @Option(names = "--fix", defaultValue = "44", description = "Default FIX dictionary version.")
+    @Option(names = "--fix", order = ORDER_FIX, defaultValue = "44", description = "Default FIX dictionary version.")
     private String fixVersion;
 
-    @Option(names = "--info", description = "Show loaded dictionary summary.")
+    @Option(names = "--info", order = ORDER_INFO, description = "Show loaded dictionary summary.")
     private boolean info;
 
-    @Option(names = "--message", arity = "0..1", fallbackValue = "", description = "Show message definition by name or MsgType.")
+    @Option(names = "--message", order = ORDER_MESSAGE, arity = "0..1", fallbackValue = "", description = "Show message definition by name or MsgType.")
     private String message;
 
-    @Option(names = "--component", arity = "0..1", fallbackValue = "", description = "Show component definition by name.")
+    @Option(names = "--component", order = ORDER_COMPONENT, arity = "0..1", fallbackValue = "", description = "Show component definition by name.")
     private String component;
 
-    @Option(names = "--tag", arity = "0..1", fallbackValue = "-1", description = "Show tag definition by number.")
+    @Option(names = "--tag", order = ORDER_TAG, arity = "0..1", fallbackValue = "-1", description = "Show tag definition by number.")
     private Integer tag;
 
-    @Option(names = "--verbose", description = "Show enum details in dictionary modes.")
+    @Option(names = "--verbose", order = ORDER_VERBOSE, description = "Show enum details in dictionary modes.")
     private boolean verbose;
 
-    @Option(names = "--column", description = "Compatibility flag for column output.")
+    @Option(names = "--column", order = ORDER_COLUMN, description = "Compatibility flag for column output.")
     private boolean column;
 
-    @Option(names = "--header", description = "Include message header in message display.")
+    @Option(names = "--header", order = ORDER_HEADER, description = "Include message header in message display.")
     private boolean header;
 
-    @Option(names = "--trailer", description = "Include message trailer in message display.")
+    @Option(names = "--trailer", order = ORDER_TRAILER, description = "Include message trailer in message display.")
     private boolean trailer;
 
-    @Option(names = "--validate", description = "Validate messages while decoding.")
+    @Option(names = "--validate", order = ORDER_VALIDATE, description = "Validate messages while decoding.")
     private boolean validate;
 
     @Option(
-            names = {"--colour", "--color"},
+            names = "--colour",
             arity = "0..1",
             fallbackValue = "yes",
             defaultValue = "auto",
+            order = ORDER_COLOUR,
             description = "Colour mode: yes, no, always, never, or auto.")
     private String colour;
 
-    @Option(names = "--delimiter", defaultValue = "\u0001", description = "Input/output delimiter.")
+    /** Accepts the US spelling alias without advertising it ahead of --colour. */
+    @SuppressWarnings("java:S1144") // picocli invokes this method reflectively.
+    @Option(names = "--color", hidden = true, arity = "0..1", fallbackValue = "yes")
+    private void setColorAlias(String value) {
+        this.colour = value;
+    }
+
+    @Option(names = "--delimiter", order = ORDER_DELIMITER, defaultValue = "\u0001", description = "Input/output delimiter.")
     private String delimiter;
 
-    @Option(names = "--secret", description = "Obfuscate sensitive values in decoded output.")
+    @Option(names = "--secret", order = ORDER_SECRET, description = "Obfuscate sensitive values in decoded output.")
     private boolean secret;
 
-    @Option(names = "--secret-files", description = "Write obfuscated .secret copies of input files.")
+    @Option(names = "--secret-files", order = ORDER_SECRET_FILES, description = "Write obfuscated .secret copies of input files.")
     private boolean secretFiles;
 
-    @Option(names = "--secret-dir", description = "Directory for --secret-files output.")
+    @Option(names = "--secret-dir", order = ORDER_SECRET_DIR, description = "Directory for --secret-files output.")
     private Path secretDir;
 
-    @Option(names = "--summary", description = "Show order summaries while decoding.")
+    @Option(names = "--summary", order = ORDER_SUMMARY, description = "Show order summaries while decoding.")
     private boolean summary;
 
-    @Option(names = "--follow", description = "Follow files as they grow.")
+    @Option(names = "--follow", order = ORDER_FOLLOW, description = "Follow files as they grow.")
     private boolean follow;
 
-    @Option(names = "--nocounts", description = "Suppress final message count summary.")
+    @Option(names = "--nocounts", order = ORDER_NOCOUNTS, description = "Suppress final message count summary.")
     private boolean noCounts;
 
-    @Option(names = "--style", description = "Compatibility flag for bat-style decorations.")
+    @Option(names = "--style", order = ORDER_STYLE, description = "Compatibility flag for bat-style decorations.")
     private String style;
 
-    @Option(names = "--plain", description = "Compatibility flag for plain output.")
+    @Option(names = "--plain", order = ORDER_PLAIN, description = "Compatibility flag for plain output.")
     private boolean plain;
 
-    @Option(names = "--number", description = "Compatibility flag for line numbers.")
+    @Option(names = "--number", order = ORDER_NUMBER, description = "Compatibility flag for line numbers.")
     private boolean number;
 
-    @Option(names = "--paging", description = "Compatibility flag for pager mode.")
+    @Option(names = "--paging", order = ORDER_PAGING, description = "Compatibility flag for pager mode.")
     private String paging;
 
-    @Option(names = "--pager", description = "Compatibility flag for pager command.")
+    @Option(names = "--pager", order = ORDER_PAGER, description = "Compatibility flag for pager command.")
     private String pager;
 
-    @Option(names = "--nowrap", description = "Compatibility flag for pager wrapping.")
+    @Option(names = "--nowrap", order = ORDER_NOWRAP, description = "Compatibility flag for pager wrapping.")
     private boolean nowrap;
 
     @Parameters(arity = "0..*", description = "FIX log files, or stdin when omitted.")

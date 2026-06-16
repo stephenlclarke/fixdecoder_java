@@ -74,6 +74,34 @@ class FixDecoderApplicationTest {
                         + separator));
         assertTrue(captured.stdout().contains("-v, --version"));
         assertFalse(captured.stdout().contains("-V, --version"));
+        assertOptionOrder(captured.stdout(),
+                "--xml",
+                "--fix",
+                "--info",
+                "--message",
+                "--component",
+                "--tag",
+                "--column",
+                "--verbose",
+                "--header",
+                "--trailer",
+                "--colour",
+                "--delimiter",
+                "--style",
+                "--plain",
+                "--number",
+                "--paging",
+                "--pager",
+                "--nowrap",
+                "--follow",
+                "--validate",
+                "--secret",
+                "--secret-files",
+                "--summary",
+                "--nocounts",
+                "--secret-dir",
+                "--help",
+                "--version");
     }
 
     /** Version output should use the lower-case short alias alongside the long option. */
@@ -110,5 +138,15 @@ class FixDecoderApplicationTest {
 
     /** Captured process streams. */
     private record Captured(String stdout) {
+    }
+
+    /** Asserts that help options appear in the expected order. */
+    private static void assertOptionOrder(String help, String... options) {
+        int cursor = 0;
+        for (String option : options) {
+            int found = help.indexOf(option, cursor);
+            assertTrue(found >= 0, () -> "missing " + option + " in help output:\n" + help);
+            cursor = found + option.length();
+        }
     }
 }
