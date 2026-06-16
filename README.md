@@ -14,7 +14,7 @@
 [![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=stephenlclarke_fixdecoder_java&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=stephenlclarke_fixdecoder_java)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=stephenlclarke_fixdecoder_java&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=stephenlclarke_fixdecoder_java)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=stephenlclarke_fixdecoder_java&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=stephenlclarke_fixdecoder_java)
-![Repo Visitors](https://visitor-badge.laobi.icu/badge?page_id=stephenlclarke.fixdecoder_java)
+![Repo Traffic](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fstephenlclarke%2Ffixdecoder_java%2Fmain%2F.badges%2Ftraffic.json&cacheSeconds=3600)
 
 ---
 
@@ -645,6 +645,10 @@ make regen-readme
 ```
 
 `make deploy` is intentionally omitted: releases are produced by the GitHub Actions tag workflow rather than a local deployment target.
+
+## Repository traffic badge
+
+The public traffic badge is generated from GitHub Insights by `.github/workflows/traffic-badge.yml`. Configure a repository secret named `TRAFFIC_TOKEN` that can call the repository traffic API; for a fine-grained personal access token, grant Repository permissions > Administration: read. The scheduled workflow publishes only the aggregate 14-day unique visitor and view counts to `.badges/traffic.json`.
 
 ## Migrated assets
 
