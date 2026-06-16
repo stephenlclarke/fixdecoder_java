@@ -113,8 +113,8 @@ class FixDecoderApplicationTest {
         Captured shortOption = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("-v")));
         Captured longOption = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--version")));
 
-        assertTrue(shortOption.stdout().contains("fixdecoder 0.3.0 (java)"));
-        assertTrue(longOption.stdout().contains("fixdecoder 0.3.0 (java)"));
+        assertVersionOutput(shortOption.stdout());
+        assertVersionOutput(longOption.stdout());
     }
 
     /** Upper-case -V should not be accepted as the version shortcut. */
@@ -151,5 +151,11 @@ class FixDecoderApplicationTest {
             assertTrue(found >= 0, () -> "missing " + option + " in help output:\n" + help);
             cursor = found + option.length();
         }
+    }
+
+    private static void assertVersionOutput(String output) {
+        assertTrue(
+                output.trim().matches("fixdecoder v0\\.3\\.0(?:-dirty)? \\(branch:[^,]+, commit:[0-9a-fA-F]{7,}\\) \\[java:.+]"),
+                "unexpected version output: " + output);
     }
 }

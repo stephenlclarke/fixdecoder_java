@@ -20,9 +20,11 @@ SELF_PATH="${BASH_SOURCE[0]:-$0}"
 readonly SELF_PATH
 SCRIPT_DIR="$(cd "$(dirname "$SELF_PATH")" && pwd)"
 readonly SCRIPT_DIR
-TARGET_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/target"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+readonly REPO_DIR
+TARGET_DIR="${REPO_DIR}/target"
 readonly TARGET_DIR
-LIB_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)/lib"
+LIB_DIR="${REPO_DIR}/lib"
 readonly LIB_DIR
 
 # Write an error and exit.
@@ -78,7 +80,7 @@ function main() {
 
   need java
   jar=$(resolve_jar)
-  exec java -jar "$jar" "$@"
+  exec java -Dfixdecoder.gitDir="$REPO_DIR" -jar "$jar" "$@"
 }
 
 main "$@"

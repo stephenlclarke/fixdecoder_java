@@ -611,14 +611,14 @@ Run it (from the release build) and check the version details:
 
 ```bash
 ❯ java -jar target/fixdecoder-java-0.3.0.jar --version
-fixdecoder 0.3.0 (java)
+fixdecoder v0.3.0 (branch:main, commit:93bf727) [java:21.0.11]
 ```
 
 Run the same build through the source-checkout wrapper:
 
 ```bash
 ❯ scripts/fixdecoder --version
-fixdecoder 0.3.0 (java)
+fixdecoder v0.3.0 (branch:main, commit:93bf727) [java:21.0.11]
 ```
 
 <!-- regen-readme:end --section=build-examples -->

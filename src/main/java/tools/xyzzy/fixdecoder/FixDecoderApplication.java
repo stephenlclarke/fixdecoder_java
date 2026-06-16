@@ -27,7 +27,7 @@ import picocli.CommandLine.Spec;
         name = "fixdecoder",
         mixinStandardHelpOptions = false,
         sortOptions = false,
-        version = "fixdecoder 0.3.0 (java)",
+        versionProvider = FixDecoderVersionProvider.class,
         customSynopsis = {
                 "fixdecoder [--xml=<xmlFiles>]... [--fix=<fixVersion>] [--info]",
                 "           [--message[=<message>]] [--component[=<component>]]",
