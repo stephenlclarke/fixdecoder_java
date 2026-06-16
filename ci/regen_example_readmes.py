@@ -79,7 +79,7 @@ def append_block(markdown: str, block: str) -> str:
 
 def render_generated_block(example: ExampleReadme) -> str:
     command = (
-        "fixdecoder --fix=44 --style=plain --paging=never --colour=no "
+        "fixdecoder --fix=44 --style=plain --paging=no --colour=no "
         f"--nocounts --delimiter='|' {example.fixlog.relative_to(ROOT)}"
     )
     output = render_pretty_print(example.fixlog)
@@ -105,7 +105,7 @@ def render_pretty_print(fixlog: Path) -> str:
         [
             "--fix=44",
             "--style=plain",
-            "--paging=never",
+            "--paging=no",
             "--colour=no",
             "--nocounts",
             "--delimiter=|",

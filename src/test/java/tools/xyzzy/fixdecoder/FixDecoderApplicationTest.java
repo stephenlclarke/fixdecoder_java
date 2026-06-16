@@ -41,11 +41,11 @@ class FixDecoderApplicationTest {
         assertFalse(captured.stdout().contains("\u001B["));
     }
 
-    /** Bare --colour and --color=never aliases should force deterministic colour modes. */
+    /** Bare --colour and --color=no aliases should force deterministic colour modes. */
     @Test
     void parsesColourAliases() {
         Captured forced = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--colour", "--fix=44")));
-        Captured disabled = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--color=never", "--fix=44")));
+        Captured disabled = capture(() -> assertEquals(0, new CommandLine(new FixDecoderApplication()).execute("--message=D", "--color=no", "--fix=44")));
 
         assertTrue(forced.stdout().contains("\u001B["));
         assertFalse(disabled.stdout().contains("\u001B["));
@@ -58,6 +58,8 @@ class FixDecoderApplicationTest {
         command.setErr(new PrintWriter(new StringWriter()));
 
         assertEquals(CommandLine.ExitCode.USAGE, command.execute("--info", "--colour=maybe"));
+        assertEquals(CommandLine.ExitCode.USAGE, command.execute("--info", "--colour=always"));
+        assertEquals(CommandLine.ExitCode.USAGE, command.execute("--info", "--paging=always"));
     }
 
     /** Help output should visually separate the one-line command description. */

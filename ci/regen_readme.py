@@ -374,8 +374,8 @@ def build_readme_examples(capabilities: CapabilitySnapshot) -> tuple[ReadmeExamp
         "--summary",
         ReadmeExample(
             option="--summary",
-            display_command="printf '<order FIX log>' | fixdecoder --fix=44 --summary --nocounts --paging=never --colour=no",
-            args=("--fix=44", "--summary", *quiet_args, "--paging=never", *colour_args),
+            display_command="printf '<order FIX log>' | fixdecoder --fix=44 --summary --nocounts --paging=no --colour=no",
+            args=("--fix=44", "--summary", *quiet_args, "--paging=no", *colour_args),
             stdin=ORDER_FIX + EXEC_FIX,
             max_lines=28,
         ),

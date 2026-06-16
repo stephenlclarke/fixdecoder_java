@@ -54,7 +54,7 @@ make regen-example-readmes
 Generated from `resources/examples/repeating_groups/all.fixlog`. The aggregate log contains 4 FIX messages, and the output below pretty-prints all of them.
 
 ```bash
-$ fixdecoder --fix=44 --style=plain --paging=never --colour=no --nocounts --delimiter='|' resources/examples/repeating_groups/all.fixlog
+$ fixdecoder --fix=44 --style=plain --paging=no --colour=no --nocounts --delimiter='|' resources/examples/repeating_groups/all.fixlog
 8=FIX.4.4|9=199|35=D|49=BUY1|56=SELL1|34=1|52=20260424-10:00:00.000|11=ORD-1001|453=2|448=DEUTDEFF|447=B|452=1|802=1|523=ACC-12345|803=10|448=CLIENT01|447=D|452=5|55=IBM|54=1|60=20260424-10:00:00.000|40=2|44=185.25|10=080|
 
      8 (BeginString): FIX.4.4

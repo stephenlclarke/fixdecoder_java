@@ -70,12 +70,12 @@ Release artifacts include the standard runnable jar and an executable
 fixdecoder [--xml=FILE --xml=FILE2 ...] [--fix=VER] [--info]
            [--message[=NAME|MSGTYPE]] [--component[=NAME]] [--tag[=TAG]]
            [--column] [--verbose] [--header] [--trailer]
-           [--colour=yes|no|auto|always|never] [--delimiter=CHAR]
+           [--colour=yes|no|auto] [--delimiter=CHAR]
            [--style=STYLE] [--plain] [--number]
-           [--paging=auto|never|always] [--pager=CMD] [--nowrap]
+           [--paging=yes|no|auto] [--pager=CMD] [--nowrap]
            [--follow] [--validate] [--secret] [--secret-files]
            [--summary] [--nocounts] [--secret-dir=DIR]
-           [--help] [--version] [file1.log file2.log ...]
+           [-h|--help] [-v|--version] [file1.log file2.log ...]
 ```
 
 Important options:
@@ -87,7 +87,7 @@ Important options:
 
 Behaviour notes:
 
-- `--colour=auto` enables ANSI colour only when attached to a terminal. Bare `--colour`, `--colour=yes`, and `--color=always` force colour on; `--colour=no` and `--color=never` force it off.
+- `--colour=auto` enables ANSI colour only when attached to a terminal. Bare `--colour`, `--colour=yes`, and `--color=yes` force colour on; `--colour=no` and `--color=no` force it off.
 - `--follow` keeps reading at EOF like `tail -f`, retaining incomplete FIX payloads so a later append can complete and decode them.
 - `--summary` suppresses the full prettified decode and emits compact per-order lifecycle updates keyed by `OrderID`, `ClOrdID`, and `OrigClOrdID`.
 
@@ -103,9 +103,9 @@ FIX protocol utility - Dictionary lookup, file decoder, validator & prettifier
 Usage: fixdecoder [--xml=FILE --xml=FILE2 ...] [--fix=VER] [--info]
            [--message[=NAME|MSGTYPE]] [--component[=NAME]] [--tag[=TAG]]
            [--column] [--verbose] [--header] [--trailer]
-           [--colour[=yes|no|auto|always|never]] [--delimiter=CHAR]
+           [--colour[=yes|no|auto]] [--delimiter=CHAR]
            [--style=STYLE] [--plain] [--number]
-           [--paging=auto|never|always] [--pager=CMD] [--nowrap]
+           [--paging=yes|no|auto] [--pager=CMD] [--nowrap]
            [--follow] [--validate] [--secret] [--secret-files]
            [--summary] [--nocounts] [--secret-dir=DIR]
            [-h|--help] [-v|--version] [file1.log file2.log ...]
@@ -117,62 +117,38 @@ Arguments:
       FIX log files, or stdin when omitted.
 
 Options:
-  --xml=FILE
-      Load a custom FIX XML dictionary. Repeat for multiple dictionaries.
-  --fix=VER
-      Default FIX dictionary version.
-  --info
-      Show loaded dictionary summary.
-  --message[=NAME|MSGTYPE]
-      Show message definition by name or MsgType; omit the value to list all.
-  --component[=NAME]
-      Show component definition by name; omit the value to list all.
-  --tag[=TAG]
-      Show tag definition by number; omit the value to list all.
-  --column
-      Display enum values in columns.
-  --verbose
-      Show enum details in dictionary modes.
-  --header
-      Include the Header block in message display.
-  --trailer
-      Include the Trailer block in message display.
-  --colour[=yes|no|auto|always|never]
-      Colour mode. Bare --colour, yes, and always force colour on; no and never
-      force it off. The hidden alias --color accepts the same values.
-  --delimiter=CHAR
-      Input and output delimiter. Use SOH, a literal character, or hex such as
-      \x01.
-  --style=STYLE
-      Bat-style decorations: plain, numbers, header, grid, or full.
-  --plain
-      Disable file headers, grids, and line numbers.
-  --number
-      Show input line numbers.
-  --paging=auto|never|always
-      Pager mode.
-  --pager=CMD
-      Pager command to use when paging is enabled.
-  --nowrap
-      Disable wrapping in pager mode and allow horizontal scrolling.
-  --follow
-      Stream input like tail -f.
-  --validate
-      Validate FIX messages during decoding.
-  --secret
-      Obfuscate sensitive FIX tag values in decoded output.
-  --secret-files
-      Write obfuscated .secret copies of the input files and exit.
-  --summary
-      Track order state across messages and print compact lifecycle summaries.
-  --nocounts
-      Disable the message count summary.
-  --secret-dir=DIR
-      Directory to write generated secret files into.
-  -h, --help
-      Show this help message and exit.
-  -v, --version
-      Print version information and exit.
+  --xml=FILE               Load a custom FIX XML dictionary. Repeat for multiple
+                           dictionaries.
+  --fix=VER                Default FIX dictionary version.
+  --info                   Show loaded dictionary summary.
+  --message[=NAME|MSGTYPE] Show message definition by name or MsgType; omit the value to
+                           list all.
+  --component[=NAME]       Show component definition by name; omit the value to list all.
+  --tag[=TAG]              Show tag definition by number; omit the value to list all.
+  --column                 Display enum values in columns.
+  --verbose                Show enum details in dictionary modes.
+  --header                 Include the Header block in message display.
+  --trailer                Include the Trailer block in message display.
+  --colour[=yes|no|auto]   Colour mode. Bare --colour, yes force colour on; no forces it
+                           off. The hidden alias --color accepts the same values.
+  --delimiter=CHAR         Input and output delimiter. Use SOH, a literal character, or hex
+                           such as \x01.
+  --style=STYLE            Bat-style decorations: plain, numbers, header, grid, or full.
+  --plain                  Disable file headers, grids, and line numbers.
+  --number                 Show input line numbers.
+  --paging=[yes|no|auto]   Pager mode.
+  --pager=CMD              Pager command to use when paging is enabled.
+  --nowrap                 Disable wrapping in pager mode and allow horizontal scrolling.
+  --follow                 Stream input like tail -f.
+  --validate               Validate FIX messages during decoding.
+  --secret                 Obfuscate sensitive FIX tag values in decoded output.
+  --secret-files           Write obfuscated .secret copies of the input files and exit.
+  --summary                Track order state across messages and print compact lifecycle
+                           summaries.
+  --nocounts               Disable the message count summary.
+  --secret-dir=DIR         Directory to write generated secret files into.
+  -h, --help               Show this help message and exit.
+  -v, --version            Print version information and exit.
 
 Command line option examples:
 
@@ -213,14 +189,14 @@ Command line option examples:
   Prettify FIX log files with optional validation and obfuscation. Bat-style
   viewing controls are available via --style, --plain, --number, --paging,
   --pager, --nowrap, and --nocounts. If output is piped then colour is disabled
-  by default but can be forced on with --colour=yes or --color=always.
+  by default but can be forced on with --colour=yes or --color=yes.
   Shell-style default options may also be supplied through FIXDECODER_DEFAULT_ARGS:
 
     fixdecoder [--xml=FILE --xml=FILE2 ...] [--fix=VER]
                [--column] [--verbose] [--header] [--trailer]
-               [--colour=yes|no|auto|always|never] [--delimiter=CHAR]
+               [--colour=yes|no|auto] [--delimiter=CHAR]
                [--style=STYLE] [--plain] [--number]
-               [--paging=auto|never|always] [--pager=CMD] [--nowrap]
+               [--paging=yes|no|auto] [--pager=CMD] [--nowrap]
                [--follow] [--validate] [--secret] [--secret-files]
                [--summary] [--nocounts] [--secret-dir=DIR]
                [file1.log file2.log ...]
@@ -243,18 +219,18 @@ Command line option examples:
     Show bat-style file headers and line numbers, but disable paging for
     follow-mode output:
 
-    $ fixdecoder --style=header,grid --number --paging=never --follow logs/fix.log
+    $ fixdecoder --style=header,grid --number --paging=no --follow logs/fix.log
 
     Enable horizontal scrolling in the pager for wide decoded lines. Without
     --nowrap, wrapped paging stays wrapped even if LESS requests chopped lines:
 
-    $ fixdecoder --paging=always --nowrap logs/fix.log
+    $ fixdecoder --paging=yes --nowrap logs/fix.log
 
     Apply default viewing options from the environment. Command-line values are
     applied afterwards and override single-value defaults. Keep input files on
     the real command line:
 
-    $ export FIXDECODER_DEFAULT_ARGS='--style=full --paging=always --nowrap'
+    $ export FIXDECODER_DEFAULT_ARGS='--style=full --paging=yes --nowrap'
     $ fixdecoder logs/fix.log
 
     Force the decoding of a FIX log to use the FIX 4.4 dictionary. Only uses the
@@ -552,7 +528,7 @@ $ printf '<FIX log>' | fixdecoder --fix=44 --nocounts --colour=no
 ### `--summary`
 
 ```bash
-$ printf '<order FIX log>' | fixdecoder --fix=44 --summary --nocounts --paging=never --colour=no
+$ printf '<order FIX log>' | fixdecoder --fix=44 --summary --nocounts --paging=no --colour=no
 Order Summary:
     Order: CL-README-1
     Message: NewOrderSingle (D)

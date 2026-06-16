@@ -32,11 +32,11 @@ import picocli.CommandLine.Spec;
                 "fixdecoder [--xml=<xmlFiles>]... [--fix=<fixVersion>] [--info]",
                 "           [--message[=<message>]] [--component[=<component>]]",
                 "           [--tag[=<tag>]] [--column] [--verbose] [--header] [--trailer]",
-                "           [--colour[=<colour>]] [--delimiter=<delimiter>] [--style=<style>]",
-                "           [--plain] [--number] [--paging=<paging>] [--pager=<pager>]",
+                "           [--colour[=yes|no|auto]] [--delimiter=<delimiter>] [--style=<style>]",
+                "           [--plain] [--number] [--paging=yes|no|auto] [--pager=<pager>]",
                 "           [--nowrap] [--follow] [--validate] [--secret] [--secret-files]",
                 "           [--summary] [--nocounts] [--secret-dir=<secretDir>]",
-                "           [--help] [--version]",
+                "           [-h|--help] [-v|--version]",
                 "           [<files>...]"
         },
         description = {
@@ -125,7 +125,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
             fallbackValue = "yes",
             defaultValue = "auto",
             order = ORDER_COLOUR,
-            description = "Colour mode: yes, no, always, never, or auto.")
+            description = "Colour mode: yes, no, or auto.")
     private String colour;
 
     /** Accepts the US spelling alias without advertising it ahead of --colour. */
@@ -165,7 +165,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
     @Option(names = "--number", order = ORDER_NUMBER, description = "Compatibility flag for line numbers.")
     private boolean number;
 
-    @Option(names = "--paging", order = ORDER_PAGING, description = "Compatibility flag for pager mode.")
+    @Option(names = "--paging", order = ORDER_PAGING, description = "Compatibility flag for pager mode: yes, no, or auto.")
     private String paging;
 
     @Option(names = "--pager", order = ORDER_PAGER, description = "Compatibility flag for pager command.")
@@ -191,6 +191,7 @@ public final class FixDecoderApplication implements Callable<Integer> {
             printUsage(out);
             return 0;
         }
+        validatePaging();
 
         DictionaryRegistry registry = new DictionaryRegistry();
         for (Path xml : xmlFiles) {
@@ -265,12 +266,26 @@ public final class FixDecoderApplication implements Callable<Integer> {
     private boolean coloursEnabled() {
         String mode = colour == null ? "auto" : colour.toLowerCase(Locale.ROOT);
         return switch (mode) {
-            case "yes", "always", "true" -> true;
-            case "no", "never", "false" -> false;
+            case "yes" -> true;
+            case "no" -> false;
             case "auto" -> System.console() != null;
             default -> throw new CommandLine.ParameterException(
                     spec.commandLine(), "invalid value for --colour: " + colour);
         };
+    }
+
+    /** Validates pager compatibility values even though this implementation does not page. */
+    private void validatePaging() {
+        if (paging == null) {
+            return;
+        }
+        switch (paging.toLowerCase(Locale.ROOT)) {
+            case "yes", "no", "auto" -> {
+                return;
+            }
+            default -> throw new CommandLine.ParameterException(
+                    spec.commandLine(), "invalid value for --paging: " + paging);
+        }
     }
 
     /** Parses SOH, hex, and literal delimiter values. */
